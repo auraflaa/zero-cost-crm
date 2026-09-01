@@ -196,21 +196,21 @@ export function SubscriptionPage() {
           </div>
         )}
         {message ? <p className="mx-auto max-w-xl rounded-none bg-amber-50 px-3 py-2 text-xs text-amber-800">{message}</p> : null}
-        <div className="flex flex-col items-center justify-center gap-2.5 pt-2 sm:flex-row sm:gap-4">
+        <div className="flex flex-col items-center justify-center gap-2 pt-2">
           <div className="inline-flex rounded-none border border-[var(--color-line)] bg-stone-50 p-1 shadow-sm">
             <button
               type="button"
               onClick={() => setPeriod('monthly')}
-              className={`rounded-none px-4 py-1.5 text-xs font-semibold transition ${period === 'monthly' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-800'}`}
+              className={`rounded-none px-5 py-2 text-xs font-semibold transition ${period === 'monthly' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-800'}`}
             >
               Monthly
             </button>
             <button
               type="button"
               onClick={() => setPeriod('yearly')}
-              className={`rounded-none px-4 py-1.5 text-xs font-semibold transition ${period === 'yearly' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-800'}`}
+              className={`rounded-none px-5 py-2 text-xs font-semibold transition ${period === 'yearly' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-800'}`}
             >
-              Yearly <span className="ml-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">Save 20%</span>
+              Yearly <span className="ml-1.5 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">Save 20%</span>
             </button>
           </div>
           <span className="text-xs text-stone-500">Cancel anytime. No charge today for setup.</span>
