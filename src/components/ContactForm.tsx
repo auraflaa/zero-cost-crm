@@ -34,6 +34,7 @@ export function ContactForm({
     champion: initial?.champion ?? false,
     lastContacted: initial?.lastContacted ?? '',
     nextFollowUp: initial?.nextFollowUp ?? '',
+    description: initial?.description ?? '',
     notes: initial?.notes ?? '',
   });
   const [stageBusy, setStageBusy] = useState(false);
@@ -73,6 +74,7 @@ export function ContactForm({
       champion: form.champion,
       lastContacted: form.lastContacted || null,
       nextFollowUp: form.nextFollowUp || null,
+      description: form.description.trim(),
       notes: form.notes,
     };
 
@@ -212,6 +214,15 @@ export function ContactForm({
             value={form.linkedInProfile}
             onChange={(e) => set('linkedInProfile', e.target.value)}
             placeholder="linkedin.com/in/… or https://…"
+          />
+        </Field>
+
+        <Field label="Description / Context (for AI scoring)" className="sm:col-span-2">
+          <textarea
+            className={`${inputClass} min-h-[60px] resize-y text-sm`}
+            value={form.description}
+            onChange={(e) => set('description', e.target.value)}
+            placeholder="e.g. Key decision maker, interested in automated call transcription and CRM sync"
           />
         </Field>
 

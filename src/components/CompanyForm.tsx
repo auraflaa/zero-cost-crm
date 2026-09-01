@@ -4,6 +4,7 @@ import { INDUSTRIES, INTENTS } from '../types';
 import { DEFAULT_STAGES } from '../defaults';
 import type { CrmStore } from '../hooks/useCrmStore';
 import { Field, inputClass, btnPrimary, btnGhost, Modal } from './ui';
+import { scoreColor, scoreLabel } from '../lib/leadScoring';
 import {
   activityDetailLines,
   eventTypeLabel,
@@ -54,6 +55,7 @@ export function CompanyForm({
   onDone,
 }: CompanyFormProps) {
   const contactOptions = initial ? store.contacts.filter((t) => t.companyId === initial.id) : [];
+  const [currentCompany, setCurrentCompany] = useState<Company | null>(initial ?? null);
 
   const [form, setForm] = useState({
     companyName: initial?.companyName ?? '',
@@ -83,6 +85,22 @@ export function CompanyForm({
   const historyEndRef = useRef<HTMLDivElement | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [rescoreBusy, setRescoreBusy] = useState(false);
+  const [rescoreError, setRescoreError] = useState<string | null>(null);
+
+  const handleRescore = async () => {
+    if (!initial?.id) return;
+    setRescoreBusy(true);
+    setRescoreError(null);
+    try {
+      const updated = await store.rescoreCompany(initial.id);
+      setCurrentCompany(updated);
+    } catch (e) {
+      setRescoreError(e instanceof Error ? e.message : 'Rescoring failed');
+    } finally {
+      setRescoreBusy(false);
+    }
+  };
 
   const discoverySections = useMemo(() => groupQuestions(discoveryQuestions), [discoveryQuestions]);
 
@@ -156,6 +174,57 @@ export function CompanyForm({
 
   return (
     <form onSubmit={submit} className="space-y-4">
+      {initial ? (
+        <div className="rounded-none border border-[var(--color-line)] bg-stone-50/70 p-3.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold tracking-wide text-stone-500 uppercase">
+                AI Lead Score
+              </span>
+              {currentCompany?.leadScore != null ? (
+                <span
+                  className={`rounded-none px-2 py-0.5 text-xs font-semibold ${scoreColor(
+                    currentCompany.leadScore
+                  )}`}
+                >
+                  {scoreLabel(currentCompany.leadScore)}
+                </span>
+              ) : (
+                <span className="rounded-none bg-stone-200 px-2 py-0.5 text-xs font-medium text-stone-600">
+                  Unscored
+                </span>
+              )}
+              {currentCompany?.leadScoredAt ? (
+                <span className="text-[11px] text-stone-400">
+                  Scored {currentCompany.leadScoredAt.slice(0, 10)}
+                </span>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              className={`${btnGhost} text-xs py-1 px-2.5`}
+              onClick={() => void handleRescore()}
+              disabled={rescoreBusy}
+            >
+              {rescoreBusy ? 'Scoring…' : 'Rescore with AI'}
+            </button>
+          </div>
+          {rescoreError ? (
+            <p className="mt-2 text-xs text-rose-600">{rescoreError}</p>
+          ) : null}
+          {currentCompany?.leadScoreReasons?.length ? (
+            <ul className="mt-2 space-y-0.5 text-xs text-stone-600">
+              {currentCompany.leadScoreReasons.map((reason, idx) => (
+                <li key={idx} className="flex items-start gap-1.5">
+                  <span className="text-teal-700 font-bold">·</span>
+                  <span>{reason}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Company Name *" className="sm:col-span-2">
           <input

@@ -268,6 +268,20 @@ export function useCrmStore(enabled: boolean, userRole?: string) {
     [state.companies]
   );
 
+  const rescoreCompany = useCallback(
+    async (id: string) => {
+      const company = await api<Company>(`/api/companies/${id}/score`, {
+        method: 'POST',
+      });
+      setState((s) => ({
+        ...s,
+        companies: s.companies.map((c) => (c.id === id ? company : c)),
+      }));
+      return company;
+    },
+    []
+  );
+
   const canDelete = canDeleteRecords(userRole);
 
   return {
@@ -279,6 +293,7 @@ export function useCrmStore(enabled: boolean, userRole?: string) {
     canDelete,
     addCompany,
     updateCompany,
+    rescoreCompany,
     deleteCompany,
     moveCompanyStage,
     addContact,

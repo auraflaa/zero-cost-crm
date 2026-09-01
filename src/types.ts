@@ -212,6 +212,8 @@ export interface Conversation {
   analysis: { score?: number; reasons?: string[]; tier?: string; summary?: string };
 }
 
+export type SubscriptionPlan = 'plus' | 'pro' | 'enterprise';
+
 /** Public + authenticated instance config from GET /api/config */
 export interface AppConfig {
   brandName: string;
@@ -222,6 +224,7 @@ export interface AppConfig {
   championStatusToStage: Record<string, string | null>;
   discoveryQuestions: import('./defaults.js').DiscoveryQuestion[];
   icpDescription: string;
+  subscriptionPlan: SubscriptionPlan;
   allowedEmailDomain: string | null;
   allowedEmailDomains: string[];
   allowAnyEmailDomain: boolean;

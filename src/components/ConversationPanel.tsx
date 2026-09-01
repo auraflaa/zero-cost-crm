@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, useRef } from 'react';
 import type { Conversation, Stage } from '../types';
 import { DEFAULT_STAGES } from '../defaults';
 import type { CrmStore } from '../hooks/useCrmStore';
+import { useSubscription } from '../hooks/useSubscription';
 import {
   deleteConversation,
   getPlayUrl,
@@ -19,10 +20,10 @@ interface ConversationPanelProps {
 
 function formatCalledAt(iso: string): string {
   try {
-    return new Date(iso).toLocaleString(undefined, {
+    return new Intl.DateTimeFormat(undefined, {
       dateStyle: 'medium',
       timeStyle: 'short',
-    });
+    }).format(new Date(iso));
   } catch {
     return iso;
   }
@@ -34,6 +35,7 @@ export function ConversationPanel({
   companyId,
   stages = [...DEFAULT_STAGES],
 }: ConversationPanelProps) {
+  const sub = useSubscription();
   const company = companyId ? store.getCompany(companyId) : null;
   const [stageAtCall, setStageAtCall] = useState<Stage>(
     company?.stage ?? stages[0] ?? 'Lead Added'
@@ -320,14 +322,24 @@ export function ConversationPanel({
                     ) : null}
                   </div>
                   {!c.transcript ? (
-                    <button
-                      type="button"
-                      className="text-[11px] font-medium text-teal-700 hover:underline"
-                      onClick={() => void transcribeNow(c.id)}
-                      disabled={transcribingId === c.id}
-                    >
-                      {transcribingId === c.id ? 'Transcribing…' : 'Transcribe'}
-                    </button>
+                    sub.hasCallAnalysis ? (
+                      <button
+                        type="button"
+                        className="text-[11px] font-medium text-teal-700 hover:underline"
+                        onClick={() => void transcribeNow(c.id)}
+                        disabled={transcribingId === c.id}
+                      >
+                        {transcribingId === c.id ? 'Transcribing…' : 'Transcribe'}
+                      </button>
+                    ) : (
+                      <a
+                        href="/?page=subscription"
+                        className="text-[11px] font-semibold text-amber-700 hover:underline"
+                        title="Transcription and call analysis require Pro plan"
+                      >
+                        Transcribe (PRO)
+                      </a>
+                    )
                   ) : null}
                 </div>
               </li>

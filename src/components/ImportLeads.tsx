@@ -11,6 +11,7 @@ import {
 } from '../lib/importProspects';
 import { Field, btnPrimary, btnGhost, inputClass } from './ui';
 import { useAppConfig } from '../hooks/useAppConfig';
+import { useSubscription } from '../hooks/useSubscription';
 import { scoreProspect, scoreColor, scoreLabel } from '../lib/leadScoring';
 import { api } from '../lib/api';
 
@@ -51,6 +52,7 @@ function formatResult(result: {
 
 export function ImportLeads({ store }: ImportLeadsProps) {
   const { config } = useAppConfig();
+  const sub = useSubscription();
   const [mode, setMode] = useState<Mode>('bulk');
   const [text, setText] = useState('');
   const [fileName, setFileName] = useState<string | null>(null);
@@ -613,13 +615,23 @@ export function ImportLeads({ store }: ImportLeadsProps) {
           <button
             key={m}
             type="button"
-            className={`flex-1 rounded-none px-3 py-2 text-sm font-medium capitalize transition ${
-              mode === m ? 'bg-white text-stone-900' : 'text-stone-500 hover:text-stone-800'
+            className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-none px-3 py-2 text-sm font-medium capitalize transition ${
+              mode === m ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-800'
             }`}
             onClick={() => setMode(m)}
             data-testid={`import-tab-${m}`}
           >
-            {m === 'single' ? 'Single lead' : m === 'bulk' ? 'Bulk import' : m === 'voice' ? 'Voice' : 'Image / Card'}
+            <span>{m === 'single' ? 'Single lead' : m === 'bulk' ? 'Bulk import' : m === 'voice' ? 'Voice' : 'Image / Card'}</span>
+            {m === 'voice' && !sub.hasVoice ? (
+              <span className="rounded bg-amber-100 px-1 py-0.2 text-[10px] font-bold text-amber-800">
+                PRO
+              </span>
+            ) : null}
+            {m === 'image' && !sub.hasImage ? (
+              <span className="rounded bg-amber-100 px-1 py-0.2 text-[10px] font-bold text-amber-800">
+                PRO
+              </span>
+            ) : null}
           </button>
         ))}
       </div>
@@ -839,6 +851,24 @@ export function ImportLeads({ store }: ImportLeadsProps) {
 
       {mode === 'voice' ? (
         <div className="space-y-4 rounded-none border border-[var(--color-line)] bg-[var(--color-panel)] p-5">
+          {!sub.hasVoice ? (
+            <div className="rounded-none border border-amber-300 bg-amber-50 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold text-amber-950 uppercase tracking-wider">Voice AI · Pro Feature</p>
+                  <p className="mt-0.5 text-xs text-amber-800">
+                    Audio recording, auto-transcription via Whisper, and voice lead extraction are available on Pro and Enterprise tiers.
+                  </p>
+                </div>
+                <a
+                  href="/?page=subscription"
+                  className={`${btnPrimary} text-xs py-1.5 px-3 bg-amber-800 hover:bg-amber-900 text-white`}
+                >
+                  View Plans & Upgrade
+                </a>
+              </div>
+            </div>
+          ) : null}
           <Field label="Voice lead — upload or record">
             <div className="flex flex-wrap items-center gap-2">
               <label className={`${btnGhost} cursor-pointer`}>
@@ -914,6 +944,24 @@ export function ImportLeads({ store }: ImportLeadsProps) {
 
       {mode === 'image' ? (
         <div className="space-y-4 rounded-none border border-[var(--color-line)] bg-[var(--color-panel)] p-5">
+          {!sub.hasImage ? (
+            <div className="rounded-none border border-amber-300 bg-amber-50 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold text-amber-950 uppercase tracking-wider">Image AI · Pro Feature</p>
+                  <p className="mt-0.5 text-xs text-amber-800">
+                    Business card OCR with Vision AI and combined voice + image lead parsing are available on Pro and Enterprise tiers.
+                  </p>
+                </div>
+                <a
+                  href="/?page=subscription"
+                  className={`${btnPrimary} text-xs py-1.5 px-3 bg-amber-800 hover:bg-amber-900 text-white`}
+                >
+                  View Plans & Upgrade
+                </a>
+              </div>
+            </div>
+          ) : null}
           <Field label="Business card — photo or card text (phone camera supported)">
             <div className="flex flex-wrap items-center gap-2">
               <label className={`${btnGhost} cursor-pointer`}>
