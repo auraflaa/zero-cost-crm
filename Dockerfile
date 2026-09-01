@@ -20,7 +20,7 @@ ENV PORT=4000
 RUN addgroup -S crm && adduser -S crm -G crm
 
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm install tsx@^4.20.5
+RUN npm ci --omit=dev
 
 COPY --from=builder /app/dist ./dist
 COPY server ./server
