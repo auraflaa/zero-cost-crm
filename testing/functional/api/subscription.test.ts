@@ -33,7 +33,23 @@ describe('subscription + AI lead scoring API', () => {
     });
     expect(invalidPatch.status).toBe(400);
 
-    // 4. PATCH /api/subscription to pro by founder
+    // 4. PATCH /api/subscription to free, plus, pro by founder
+    const freePatch = await api<{ plan: string }>('/api/subscription', {
+      method: 'PATCH',
+      token: founderToken,
+      body: { plan: 'free' },
+    });
+    expect(freePatch.status).toBe(200);
+    expect(freePatch.data.plan).toBe('free');
+
+    const plusPatch = await api<{ plan: string }>('/api/subscription', {
+      method: 'PATCH',
+      token: founderToken,
+      body: { plan: 'plus' },
+    });
+    expect(plusPatch.status).toBe(200);
+    expect(plusPatch.data.plan).toBe('plus');
+
     const proPatch = await api<{ plan: string }>('/api/subscription', {
       method: 'PATCH',
       token: founderToken,

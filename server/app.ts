@@ -235,23 +235,24 @@ app.get('/api/subscription', requireAuth, async (_req, res) => {
 
 app.patch('/api/subscription', requireAuth, requireAdmin, async (req, res) => {
   const raw = String((req.body as Record<string, unknown>).plan ?? '').trim().toLowerCase();
-  if (!['plus', 'pro', 'enterprise'].includes(raw)) {
-    res.status(400).json({ error: 'Invalid plan. Use plus, pro, or enterprise.' });
+  if (!['free', 'plus', 'pro', 'enterprise'].includes(raw)) {
+    res.status(400).json({ error: 'Invalid plan. Use free, plus, pro, or enterprise.' });
     return;
   }
-  const settings = await updateAppSettings({ subscriptionPlan: raw as 'plus' | 'pro' | 'enterprise' });
+  const settings = await updateAppSettings({ subscriptionPlan: raw as 'free' | 'plus' | 'pro' | 'enterprise' });
   res.json({ plan: settings.subscriptionPlan });
 });
 
 async function requireFeatureOr402(feature: Feature, res: express.Response): Promise<boolean> {
   const plan = await getCurrentPlan();
   if (hasFeature(plan, feature)) return true;
+  const requiredPlan = feature === 'call_analysis' ? 'pro' : 'plus';
   res.status(402).json({
-    error: `This feature requires ${feature === 'voice_ai' ? 'Pro' : feature === 'image_ai' ? 'Pro' : feature === 'lead_scoring' ? 'Pro' : 'Pro'} plan. Upgrade in Subscription.`,
+    error: `This feature requires ${requiredPlan === 'pro' ? 'Pro' : 'Plus or Pro'} plan. Upgrade in Subscription.`,
     code: 'SUBSCRIPTION_REQUIRED',
     plan,
     feature,
-    requiredPlan: 'pro',
+    requiredPlan,
   });
   return false;
 }

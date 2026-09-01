@@ -4,7 +4,8 @@ import { config } from './config.js';
 export type Feature = 'voice_ai' | 'image_ai' | 'lead_scoring' | 'call_analysis';
 
 const FEATURE_MAP: Record<SubscriptionPlan, Set<Feature>> = {
-  plus: new Set<Feature>([]),
+  free: new Set<Feature>([]),
+  plus: new Set<Feature>(['voice_ai', 'image_ai', 'lead_scoring']),
   pro: new Set<Feature>(['voice_ai', 'image_ai', 'lead_scoring', 'call_analysis']),
   enterprise: new Set<Feature>(['voice_ai', 'image_ai', 'lead_scoring', 'call_analysis']),
 };
@@ -26,7 +27,7 @@ export async function requireFeature(feature: Feature): Promise<{ allowed: boole
   // Determine minimal required plan
   let required: SubscriptionPlan = 'pro';
   for (const p of ['plus', 'pro', 'enterprise'] as SubscriptionPlan[]) {
-    if (FEATURE_MAP[p].has(feature)) {
+    if (FEATURE_MAP[p]?.has(feature)) {
       required = p;
       break;
     }

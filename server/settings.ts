@@ -17,7 +17,7 @@ import {
   type DiscoveryQuestion,
 } from '../src/defaults.js';
 
-export type SubscriptionPlan = 'plus' | 'pro' | 'enterprise';
+export type SubscriptionPlan = 'free' | 'plus' | 'pro' | 'enterprise';
 
 export interface AppSettings {
   brandName: string;
@@ -84,8 +84,8 @@ export function asDiscoveryQuestions(value: unknown): DiscoveryQuestion[] {
 }
 
 function asSubscriptionPlan(v: unknown): SubscriptionPlan {
-  if (v === 'pro' || v === 'enterprise' || v === 'plus') return v;
-  return 'plus';
+  if (v === 'free' || v === 'plus' || v === 'pro' || v === 'enterprise') return v;
+  return 'free';
 }
 
 function rowToSettings(row: Record<string, unknown>): AppSettings {
@@ -113,13 +113,14 @@ function defaultSettingsFromEnv(): AppSettings {
     championStatusToStage: { ...DEFAULT_CHAMPION_STATUS_TO_STAGE },
     discoveryQuestions: [...DEFAULT_DISCOVERY_QUESTIONS],
     icpDescription: readEnv('ICP_DESCRIPTION') ?? DEFAULT_ICP_DESCRIPTION,
-    subscriptionPlan: (readEnv('SUBSCRIPTION_PLAN') as SubscriptionPlan) ?? 'plus',
+    subscriptionPlan: (readEnv('SUBSCRIPTION_PLAN') as SubscriptionPlan) ?? 'pro',
     updatedAt: null,
   };
 }
 
 let cache: AppSettings | null = null;
 let cacheAt = 0;
+let constraintChecked = false;
 const CACHE_MS = 5_000;
 
 export function invalidateSettingsCache() {
@@ -128,6 +129,23 @@ export function invalidateSettingsCache() {
 }
 
 export async function ensureAppSettings(): Promise<AppSettings> {
+  if (!constraintChecked) {
+    try {
+      await pool.query(`
+        DO $$
+        BEGIN
+          ALTER TABLE app_settings DROP CONSTRAINT IF EXISTS app_settings_subscription_plan_check;
+          ALTER TABLE app_settings ADD CONSTRAINT app_settings_subscription_plan_check CHECK (subscription_plan IN ('free','plus','pro','enterprise'));
+        EXCEPTION WHEN OTHERS THEN
+          NULL;
+        END $$;
+      `);
+      constraintChecked = true;
+    } catch {
+      // Ignore migration errors if table doesn't exist yet
+    }
+  }
+
   const existing = await pool.query('SELECT * FROM app_settings WHERE id = 1');
   if (existing.rows[0]) {
     return rowToSettings(existing.rows[0] as Record<string, unknown>);

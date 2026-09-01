@@ -173,7 +173,7 @@ ALTER TABLE app_settings
   ADD COLUMN IF NOT EXISTS icp_description TEXT NOT NULL DEFAULT '';
 
 ALTER TABLE app_settings
-  ADD COLUMN IF NOT EXISTS subscription_plan TEXT NOT NULL DEFAULT 'plus' CHECK (subscription_plan IN ('plus','pro','enterprise'));
+  ADD COLUMN IF NOT EXISTS subscription_plan TEXT NOT NULL DEFAULT 'free' CHECK (subscription_plan IN ('free','plus','pro','enterprise'));
 
 ALTER TABLE app_settings
   ADD COLUMN IF NOT EXISTS subscription_updated_at TIMESTAMPTZ;
