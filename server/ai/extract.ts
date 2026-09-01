@@ -3,26 +3,32 @@ import type { ProspectRow } from '../../src/types.js';
 import { parseProspectAuto } from '../../src/lib/importProspects.js';
 
 // Lead extraction: TSV/CSV, single row, or free-form spoken English
-const SYSTEM_EXTRACT_JSON = `You are a precise lead data extractor. Input may be TSV/CSV, single CSV row, or free-form spoken English like meeting notes.
+const SYSTEM_EXTRACT_JSON = `You are an expert sales lead data extractor. Your job is to extract structured lead records from any spoken notes, meeting transcripts, business card texts, or pasted data.
 
-GOAL: Extract all leads. Output ONLY a JSON array, no markdown.
-
-Each object: {company (required), prospectName (required), jobTitle, email (lowercase), phone, location, employees (number|null), industry (BFSI, Healthcare, Retail, EdTech, Telecom, SaaS, Logistics, Research / Biotech, Other or ""), description (1 sentence for scoring), rawInputText (first 200 chars)}
+Return a JSON object with a single "leads" array:
+{
+  "leads": [
+    {
+      "company": "Company or Organization name (required)",
+      "prospectName": "Full name or first name of the prospect/contact (required)",
+      "jobTitle": "Job title or role (e.g. VP of Sales, CEO, Head of Ops, Founder, Engineer)",
+      "email": "lowercase email address if mentioned, else empty string",
+      "phone": "phone number if mentioned, else empty string",
+      "location": "city or country if mentioned, else empty string",
+      "employees": null,
+      "industry": "industry (e.g. SaaS, Healthcare, BFSI, Retail, EdTech, Telecom, Logistics, Other)",
+      "description": "1 concise sentence summarizing the prospect context, requirements, or next steps",
+      "rawInputText": "first 200 chars of source text"
+    }
+  ]
+}
 
 RULES:
-- Skip if company or prospectName missing.
-- Normalize: email lowercase, phone trimmed, employees digits-only or null, industry inferred.
-- For TSV/CSV: Company | Prospect Name | Job Title | Email | Phone | Location | Employees | Industry (header optional). "Acme Corp, Alex Smith, CEO, alex@acme.com, 5550100, Austin, 50, SaaS" is valid.
-- For free-form meeting notes, infer from natural language. Examples:
-  Input: "Hi I'm Alex from Acme Bio Labs, head of ops, email alex@acme.example, phone 5550101, Austin, 180 employees, Research"
-  Output: [{"company":"Acme Bio Labs","prospectName":"Alex","jobTitle":"Head of Operations","email":"alex@acme.example","phone":"5550101","location":"Austin","employees":180,"industry":"Research / Biotech","description":"Research 180-person Austin team","rawInputText":"Hi I'm Alex..."}]
-  Input: "Today I met the VP of Sales of Hoogway named Taufeeq, he is interested in getting a demo"
-  Output: [{"company":"Hoogway","prospectName":"Taufeeq","jobTitle":"VP of Sales","email":"","phone":"","location":"","employees":null,"industry":"","description":"VP of Sales at Hoogway interested in demo","rawInputText":"Today I met..."}]
-  Input: "Acme, Alex, CEO, a@acme.com, 555, Austin, 120, SaaS" -> [{"company":"Acme","prospectName":"Alex","jobTitle":"CEO","email":"a@acme.com","phone":"555","location":"Austin","employees":120,"industry":"SaaS","description":"SaaS 120 Austin","rawInputText":"Acme, Alex..."}]
-- If only company and prospectName can be inferred, still return with other fields ""/null. Use "named X" for prospect, "VP of Sales of Y" or "of Y" for company, "VP of Sales" for jobTitle.
-- Return [] if no valid leads.`;
-
-
+- Always extract company and prospectName. If only a person and role are mentioned at a company, infer company and name accurately.
+- For conversational notes (e.g. "Met Sarah from Stripe yesterday, she's VP of Engineering, email sarah@stripe.example, interested in a demo"):
+  -> company="Stripe", prospectName="Sarah", jobTitle="VP of Engineering", email="sarah@stripe.example", industry="SaaS", description="VP of Engineering at Stripe interested in demo"
+- For CSV/TSV or delimited rows: extract all columns into the "leads" array.
+- Return {"leads": []} only if the text contains zero business or contact information.`;
 
 function safeJsonArray(text: string): unknown[] | null {
   const t = text.trim();
@@ -34,15 +40,29 @@ function safeJsonArray(text: string): unknown[] | null {
     const v = JSON.parse(cleaned);
     if (Array.isArray(v)) return v;
     if (v && typeof v === 'object') {
-      // Handle {"leads": [...]}, {"data": [...]}, {"prospects": [...]}, or single object
       const obj = v as Record<string, unknown>;
-      for (const k of ['leads', 'data', 'prospects', 'rows', 'result']) {
+      for (const k of ['leads', 'data', 'prospects', 'rows', 'result', 'items']) {
         if (Array.isArray(obj[k])) return obj[k] as unknown[];
       }
-      // Single object case: wrap it
-      if (typeof obj.company === 'string' && typeof obj.prospectName === 'string') return [obj];
+      // Single object case: wrap it if it has company or prospectName
+      if (typeof obj.company === 'string' || typeof obj.prospectName === 'string' || typeof obj.name === 'string') {
+        return [{
+          company: obj.company ?? obj.organization ?? obj.org ?? '',
+          prospectName: obj.prospectName ?? obj.prospect_name ?? obj.name ?? obj.contact ?? '',
+          jobTitle: obj.jobTitle ?? obj.job_title ?? obj.title ?? obj.role ?? '',
+          email: obj.email ?? '',
+          phone: obj.phone ?? '',
+          location: obj.location ?? obj.city ?? '',
+          employees: obj.employees ?? null,
+          industry: obj.industry ?? '',
+          description: obj.description ?? '',
+          rawInputText: obj.rawInputText ?? obj.raw_input_text ?? '',
+        }];
+      }
       // If object contains an array somewhere, find first array value
-      for (const v2 of Object.values(obj)) if (Array.isArray(v2)) return v2 as unknown[];
+      for (const v2 of Object.values(obj)) {
+        if (Array.isArray(v2)) return v2 as unknown[];
+      }
     }
   } catch {}
   // Fallback: extract first bracketed array via regex
@@ -59,21 +79,64 @@ function safeJsonArray(text: string): unknown[] | null {
       if (Array.isArray(v3)) return v3;
     } catch {}
   }
+  // Fallback: extract first bracketed object via regex
+  const mObj = cleaned.match(/\{[\s\S]*\}/);
+  if (mObj) {
+    try {
+      const vObj = JSON.parse(mObj[0]);
+      if (vObj && typeof vObj === 'object') {
+        const obj = vObj as Record<string, unknown>;
+        for (const k of ['leads', 'data', 'prospects', 'rows', 'result', 'items']) {
+          if (Array.isArray(obj[k])) return obj[k] as unknown[];
+        }
+        if (obj.company || obj.prospectName || obj.name) {
+          return [{
+            company: obj.company ?? obj.organization ?? obj.org ?? '',
+            prospectName: obj.prospectName ?? obj.prospect_name ?? obj.name ?? '',
+            jobTitle: obj.jobTitle ?? obj.job_title ?? obj.title ?? obj.role ?? '',
+            email: obj.email ?? '',
+            phone: obj.phone ?? '',
+            location: obj.location ?? '',
+            employees: obj.employees ?? null,
+            industry: obj.industry ?? '',
+            description: obj.description ?? '',
+          }];
+        }
+      }
+    } catch {}
+  }
   return null;
 }
 
 function toProspectRows(arr: unknown[], fallbackRaw: string): ProspectRow[] {
   return (arr as Record<string, unknown>[])
-    .filter((x) => x && typeof x === 'object' && (x as Record<string, unknown>).company && (x as Record<string, unknown>).prospectName)
+    .filter((x) => x && typeof x === 'object')
     .map((x) => {
       const r = x as Record<string, unknown>;
+      let company = String(r.company ?? r.organization ?? r.org ?? '').trim();
+      let prospectName = String(r.prospectName ?? r.prospect_name ?? r.name ?? r.contact ?? '').trim();
+      // If company is missing but email has domain, infer company
+      const email = String(r.email ?? '').trim().toLowerCase();
+      if (!company && email && email.includes('@')) {
+        const domain = email.split('@')[1]?.split('.')[0];
+        if (domain && !['gmail', 'yahoo', 'hotmail', 'outlook', 'example'].includes(domain)) {
+          company = domain.charAt(0).toUpperCase() + domain.slice(1);
+        }
+      }
+      // If prospect is missing but jobTitle exists, use job title or "Representative"
+      if (!prospectName && (r.jobTitle || r.job_title || r.role)) {
+        prospectName = String(r.jobTitle ?? r.job_title ?? r.role).trim();
+      }
+      if (!prospectName && company) {
+        prospectName = 'Lead Contact';
+      }
       return {
-        company: String(r.company ?? '').trim(),
-        prospectName: String(r.prospectName ?? r.prospect_name ?? '').trim(),
-        jobTitle: String(r.jobTitle ?? r.job_title ?? '').trim(),
-        email: String(r.email ?? '').trim().toLowerCase(),
+        company,
+        prospectName,
+        jobTitle: String(r.jobTitle ?? r.job_title ?? r.title ?? r.role ?? '').trim(),
+        email,
         phone: String(r.phone ?? '').trim(),
-        location: String(r.location ?? '').trim(),
+        location: String(r.location ?? r.city ?? '').trim(),
         employees: r.employees != null ? Number(String(r.employees).replace(/[^0-9]/g, '')) || null : null,
         industry: String(r.industry ?? '').trim(),
         description: String(r.description ?? '').trim(),
@@ -125,24 +188,15 @@ export async function extractFromVoice(input: {
   transcript = transcript.trimStart().trim();
   if (!transcript) return { rows: [], errors: ['No transcript available. Speak clearly, upload audio, or paste details.'], transcript };
 
-  // LLM-First: Use constrained LLM when API key is available — strict JSON array output
+  // LLM-First: Use constrained LLM when API key is available — strict JSON object with "leads" array
   if (config.ai.provider !== 'mock' && config.ai.apiKey) {
     try {
       const baseUrl = config.ai.provider === 'groq' ? 'https://api.groq.com/openai/v1' : 'https://api.openai.com/v1';
-      const userPrompt = `Extract leads from the following transcript. Output ONLY the JSON array, no other text.
+      const userPrompt = `Extract all sales leads from this input into a JSON object with a "leads" array:
 
-Transcript:
 """
 ${transcript}
-"""
-
-Rules for extraction:
-- For CSV/TSV like "Acme Corp, Alex Smith, CEO, alex@acme.com, 5550100, Austin, 50, SaaS" -> parse columns Company | Prospect Name | Job Title | Email | Phone | Location | Employees | Industry
-- For free-form like "Today I met the VP of Sales of Hoogway named Taufeeq, he is interested in getting a demo" -> infer company=Hoogway, prospectName=Taufeeq, jobTitle=VP of Sales
-- For "Hi I'm Alex from Acme Bio Labs, head of ops, email alex@acme.example" -> company Acme Bio Labs, prospect Alex
-- Always return JSON array even for single lead, never an object. If no leads, return [].
-
-Respond with JSON array only.`;
+"""`;
       const res = await fetch(`${baseUrl}/chat/completions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.ai.apiKey}` },
@@ -188,17 +242,15 @@ Respond with JSON array only.`;
     }
   }
 
-  if (config.ai.provider === 'mock' || !config.ai.apiKey) {
-    const p = parseProspectAuto(transcript);
-    if (p.rows.length) return { rows: p.rows.map((r) => ({ ...r, rawInputText: transcript.slice(0, 2000) })), errors: p.errors, transcript };
-    return { rows: [], errors: ['Could not parse details. Please provide Company and Prospect Name, or try rephrasing.'], transcript };
-  }
-
-  // Final heuristic fallback for free-form without LLM
+  // Heuristic fallback for free-form when LLM is unavailable or unparseable
   const heuristic = heuristicFreeForm(transcript);
   if (heuristic) return { rows: [heuristic], errors: [], transcript };
 
-  return { rows: [], errors: ['Could not extract lead. Try: "Acme Corp, Alex Smith, CEO, alex@acme.com, 5550100, Austin, 50, SaaS"'], transcript };
+  if (auto.rows.length) {
+    return { rows: auto.rows.map((r) => ({ ...r, rawInputText: transcript.slice(0, 2000) })), errors: auto.errors, transcript };
+  }
+
+  return { rows: [], errors: ['Could not extract lead details. Please specify at least the company name and contact name.'], transcript };
 }
 
 function heuristicFreeForm(text: string): ProspectRow | null {
@@ -207,18 +259,19 @@ function heuristicFreeForm(text: string): ProspectRow | null {
   const emailMatch = clean.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-z]{2,}/);
   const phoneMatch = clean.match(/(\+?\d[\d\s\-()]{5,}\d)/) ?? clean.match(/\b\d{7,15}\b/);
   const employeesMatch = clean.match(/(\d+)\s*(employees|people|staff)/i);
-  // Prospect via "named X", "I am X", "My name is X", or last capitalized name
+  
+  // Prospect via "named X", "I am X", "My name is X", "met with X", "spoke with X"
   let prospectName = '';
-  const namedMatch = clean.match(/\bnamed\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b/i);
+  const namedMatch = clean.match(/\bnamed\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b/i) ??
+    clean.match(/\b(?:met with|spoke with|call with|talking to)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b/i);
   if (namedMatch) prospectName = namedMatch[1].trim();
   if (!prospectName) {
     const nameFrom = clean.match(/\bI am\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b/i) ?? clean.match(/\bMy name is\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b/i) ?? clean.match(/\bThis is\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b/i);
     if (nameFrom) prospectName = nameFrom[1].trim().replace(/\s+from$/i, '').trim();
   }
   if (!prospectName) {
-    // Fallback: last solitary capitalized name that is not a known role/company word
     const caps = [...clean.matchAll(/\b([A-Z][a-z]{2,})\b/g)].map((m) => m[1]);
-    const skip = new Set(['Today', 'Sales', 'Hoogway', 'Acme', 'Bio', 'Labs']);
+    const skip = new Set(['Today', 'Sales', 'Acme', 'Bio', 'Labs', 'Lead', 'Meeting', 'Call', 'Yesterday']);
     for (let i = caps.length - 1; i >= 0; i--) {
       const w = caps[i];
       if (!skip.has(w) && w.length >= 3) {
@@ -227,40 +280,28 @@ function heuristicFreeForm(text: string): ProspectRow | null {
       }
     }
   }
-  // Company via "of Hoogway", "from X", "at X", "VP of Sales of X"
+
+  // Company via "from X", "at X", "of X"
   let company = '';
-  const ofHoogway = clean.match(/\bof\s+([A-Z][a-zA-Z0-9]+)\b(?:\s+named|\s*,|\s+he|\s+she|$)/i);
-  if (ofHoogway) company = ofHoogway[1].trim();
-  if (!company) {
-    const compFrom = clean.match(/\bfrom\s+([^,]+?)(?:,|\s+I am|\s+email|\s+phone|\s+location|\s+\d| named|$)/i) ?? clean.match(/\bat\s+([^,]+?)(?:,|\s+I am|\s+email|\s+phone|$)/i);
-    if (compFrom) {
-      company = compFrom[1].trim().replace(/\s+email.*$/i, '').trim().replace(/\s+named.*$/i, '').trim().replace(/\s+I am.*$/i, '').trim();
-    }
-  }
-  // Also try "VP of Sales of Hoogway" -> Hoogway
-  if (!company || company.toLowerCase().includes('sales')) {
-    const vpOf = clean.match(/VP of Sales of\s+([A-Z][a-zA-Z0-9]+)/i) ?? clean.match(/of\s+([A-Z][a-zA-Z0-9]+)\s+named/i);
-    if (vpOf) company = vpOf[1].trim();
+  const compFrom = clean.match(/\bfrom\s+([^,]+?)(?:,|\s+I am|\s+email|\s+phone|\s+location|\s+\d|\s+named|\s+who|\s+is|\s+he|\s+she|$)/i) ??
+    clean.match(/\bat\s+([^,]+?)(?:,|\s+I am|\s+email|\s+phone|\s+who|\s+is|$)/i) ??
+    clean.match(/\bof\s+([A-Z][a-zA-Z0-9\s]+?)(?:\s+named|\s*,|\s+he|\s+she|$)/i);
+  if (compFrom) {
+    company = compFrom[1].trim().replace(/\s+email.*$/i, '').trim().replace(/\s+named.*$/i, '').trim();
   }
   if (!company) {
     const firstCap = clean.match(/([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})/);
     if (firstCap && prospectName && !prospectName.includes(firstCap[1])) company = firstCap[1];
     else if (firstCap) company = firstCap[1];
   }
-  // Ensure company is not just "Acme" when original was "Acme Bio Labs" — capture up to 4 words if needed
-  if (company && company.split(/\s+/).length < 2) {
-    const extended = clean.match(new RegExp(`\\bfrom\\s+(${company.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\w\\s&\\-]+?)(?:,|\\s+I am|\\s+email)`, 'i'));
-    if (extended && extended[1].trim().split(/\s+/).length > 1) company = extended[1].trim();
-  }
-  // If we still lack required fields, try to find any two capitalized words as fallback company/prospect
-  if (!company || !prospectName) {
-    // Try to split by comma: "Acme Bio Labs, Alex Smith, ..." — already handled by CSV heuristic above, so if we are here it's truly free-form
-    if (!company && prospectName) {
-      // Use first sentence's subject as company hint
-      const m2 = clean.match(/from\s+([^,]+)/i);
-      if (m2) company = m2[1].trim();
+
+  if (!company && emailMatch) {
+    const domain = emailMatch[0].split('@')[1]?.split('.')[0];
+    if (domain && !['gmail', 'yahoo', 'hotmail', 'outlook', 'example'].includes(domain)) {
+      company = domain.charAt(0).toUpperCase() + domain.slice(1);
     }
   }
+
   if (!company || !prospectName) return null;
   // Industry heuristic: look for known industry keywords
   const indRaw = clean.match(/\b(Healthcare|BFSI|Retail|EdTech|Telecom|SaaS|Logistics|Research|Biotech)\b/i);

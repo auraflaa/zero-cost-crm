@@ -897,10 +897,10 @@ export function ImportLeads({ store }: ImportLeadsProps) {
               className={`${inputClass} min-h-28 font-mono text-xs`}
               value={voiceTranscript}
               onChange={(e) => setVoiceTranscript(e.target.value)}
-              placeholder={`Natural: Today I met the VP of Sales of Hoogway named Taufeeq, he is interested in getting a demo\nOr CSV: Acme Bio Labs, Alex Example, Head of Ops, alex@acme.example, 5550101, Austin, 180, Research`}
+              placeholder="Speak naturally, record a voice note, or paste lead data (e.g. Met with Sarah Connor, VP of Operations at Cyberdyne, email sarah@cyberdyne.example, interested in a demo)&#10;Or paste CSV/TSV data"
               rows={4}
             />
-            <p className="mt-1 text-xs text-stone-500">Speak naturally or paste CSV — e.g. "VP of Sales of Hoogway named Taufeeq" will extract company Hoogway, prospect Taufeeq.</p>
+            <p className="mt-1 text-xs text-stone-500">Speak naturally, record a voice note, or paste lead data to automatically extract company, prospect, and contact details.</p>
           </Field>
           <div className="flex gap-2">
             <button type="button" className={btnPrimary} onClick={() => void runVoiceExtract()} disabled={!voiceTranscript.trim() || voiceBusy}>

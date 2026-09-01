@@ -19,14 +19,23 @@ export async function scoreProspectsAI(
   }
 
   try {
-    const system = `You are a precise ICP lead scorer. Output ONLY a JSON array, no markdown.
-Each element: {score:number 0-10 (integer), reasons:string[] (1-3 short reasons), tier:"Hot"|"Warm"|"Cold"}
+    const system = `You are a precise ICP lead scorer. Return a JSON object with a "scores" array.
+Schema:
+{
+  "scores": [
+    {
+      "score": number (integer 0-10),
+      "reasons": string[] (1-3 concise reasons),
+      "tier": "Hot" | "Warm" | "Cold"
+    }
+  ]
+}
+
 Rules:
 - score 8-10 Hot, 5-7 Warm, 0-4 Cold
 - Factors: industry match, employee count proximity to ICP numbers, location match, role seniority, description relevance, contact completeness (email/phone).
-- Be strict and consistent. Return array length must equal input leads count, in same order.
-- No explanation, only JSON array. Example: [{"score":8,"reasons":["SaaS matches ICP","120 employees near 100 target"],"tier":"Hot"}]`;
-    const user = `ICP: """${icpDescription.trim()}"""` + `\n\nLeads to score (${rows.length}):\n${JSON.stringify(rows, null, 2)}\n\nReturn JSON array per spec (score 0-10), same order.`;
+- Be strict and consistent. The "scores" array length must equal input leads count, in the exact same order.`;
+    const user = `ICP: """${icpDescription.trim()}"""` + `\n\nLeads to score (${rows.length}):\n${JSON.stringify(rows, null, 2)}\n\nReturn JSON object with "scores" array (score 0-10), same order.`;
     const baseUrl = config.ai.provider === 'groq' ? 'https://api.groq.com/openai/v1' : 'https://api.openai.com/v1';
     const res = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
@@ -44,7 +53,7 @@ Rules:
     if (!res.ok) throw new Error(`AI ${res.status}`);
     const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
     const content = data.choices?.[0]?.message?.content?.trim() ?? '';
-    // Reuse robust parser from extract
+    // Reuse robust parser
     const tryParseArray = (txt: string): unknown[] | null => {
       const clean = txt.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/g, '').trim();
       try {
@@ -52,7 +61,7 @@ Rules:
         if (Array.isArray(v)) return v;
         if (v && typeof v === 'object') {
           const o = v as Record<string, unknown>;
-          for (const k of ['scores', 'leads', 'data', 'result', 'scoring']) if (Array.isArray(o[k])) return o[k] as unknown[];
+          for (const k of ['scores', 'leads', 'data', 'result', 'scoring', 'items']) if (Array.isArray(o[k])) return o[k] as unknown[];
           if (typeof o.score === 'number') return [o];
         }
       } catch {}
