@@ -67,8 +67,8 @@ export function CompanyForm({
     intent: initial?.intent ?? '',
     offeredPrice: initial?.offeredPrice?.toString() ?? '',
     primaryContactId: initial?.primaryContactId ?? '',
-    lastContacted: initial?.lastContacted ?? '',
-    nextFollowUp: initial?.nextFollowUp ?? '',
+    lastContacted: initial?.lastContacted ? String(initial.lastContacted).slice(0, 10) : '',
+    nextFollowUp: initial?.nextFollowUp ? String(initial.nextFollowUp).slice(0, 10) : '',
     notes: initial?.notes ?? '',
     sourceLink: initial?.sourceLink ?? '',
     companyWebsite: initial?.companyWebsite ?? '',
@@ -85,6 +85,8 @@ export function CompanyForm({
   const historyEndRef = useRef<HTMLDivElement | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [rescoreBusy, setRescoreBusy] = useState(false);
   const [rescoreError, setRescoreError] = useState<string | null>(null);
 
@@ -138,34 +140,46 @@ export function CompanyForm({
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!form.companyName.trim()) return;
-
-    const payload = {
-      companyName: form.companyName.trim(),
-      stage: form.stage,
-      industry: form.industry as Company['industry'],
-      location: form.location,
-      estimatedCallVolume: form.estimatedCallVolume ? Number(form.estimatedCallVolume) : null,
-      employeeCount: form.employeeCount ? Number(form.employeeCount) : null,
-      intent: form.intent as Company['intent'],
-      offeredPrice: form.offeredPrice ? Number(form.offeredPrice) : null,
-      primaryContactId: form.primaryContactId || null,
-      lastContacted: form.lastContacted || null,
-      nextFollowUp: form.nextFollowUp || null,
-      notes: form.notes,
-      sourceLink: form.sourceLink.trim(),
-      companyWebsite: normalizeOptionalUrl(form.companyWebsite),
-      linkedInCompany: normalizeOptionalUrl(form.linkedInCompany),
-      discoveryAnswers,
-      description: form.description.trim(),
-    };
-
-    if (initial) {
-      await store.updateCompany(initial.id, payload);
-    } else {
-      await store.addCompany(payload);
+    if (!form.companyName.trim()) {
+      setError('Company name is required');
+      return;
     }
-    onDone();
+
+    setBusy(true);
+    setError(null);
+    try {
+      const payload = {
+        companyName: form.companyName.trim(),
+        stage: form.stage,
+        industry: form.industry as Company['industry'],
+        location: form.location.trim(),
+        estimatedCallVolume: form.estimatedCallVolume ? Number(form.estimatedCallVolume) : null,
+        employeeCount: form.employeeCount ? Number(form.employeeCount) : null,
+        intent: form.intent as Company['intent'],
+        offeredPrice: form.offeredPrice ? Number(form.offeredPrice) : null,
+        primaryContactId: form.primaryContactId ? form.primaryContactId.trim() : null,
+        lastContacted: form.lastContacted ? form.lastContacted.slice(0, 10) : null,
+        nextFollowUp: form.nextFollowUp ? form.nextFollowUp.slice(0, 10) : null,
+        notes: form.notes.trim(),
+        sourceLink: form.sourceLink.trim(),
+        companyWebsite: normalizeOptionalUrl(form.companyWebsite),
+        linkedInCompany: normalizeOptionalUrl(form.linkedInCompany),
+        discoveryAnswers,
+        description: form.description.trim(),
+      };
+
+      if (initial) {
+        await store.updateCompany(initial.id, payload);
+      } else {
+        await store.addCompany(payload);
+      }
+      onDone();
+    } catch (err) {
+      console.error('Company save failed:', err);
+      setError(err instanceof Error ? err.message : 'Failed to save company');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const assignedToDisplay = initial
@@ -508,12 +522,19 @@ export function CompanyForm({
         </section>
       ) : null}
 
+      {error ? (
+        <p className="rounded-none border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+          {error}
+        </p>
+      ) : null}
+
       <div className="flex items-center justify-between gap-3 border-t border-[var(--color-line)] pt-4">
         {initial && store.canDelete ? (
           <button
             type="button"
             className="text-sm text-rose-600 hover:underline"
             onClick={() => setConfirmDelete(true)}
+            disabled={busy || deleteBusy}
           >
             Delete company
           </button>
@@ -521,11 +542,11 @@ export function CompanyForm({
           <span />
         )}
         <div className="flex gap-2">
-          <button type="button" className={btnGhost} onClick={onDone}>
+          <button type="button" className={btnGhost} onClick={onDone} disabled={busy}>
             Cancel
           </button>
-          <button type="submit" className={btnPrimary}>
-            {initial ? 'Save changes' : 'Add company'}
+          <button type="submit" className={btnPrimary} disabled={busy}>
+            {busy ? 'Saving…' : initial ? 'Save changes' : 'Add company'}
           </button>
         </div>
       </div>

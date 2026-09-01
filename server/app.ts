@@ -679,19 +679,19 @@ app.patch('/api/companies/:id', requireAuth, async (req, res) => {
     update.set('stage', b.stage);
   }
   if (b.industry !== undefined) update.set('industry', emptyToNull(b.industry));
-  if (b.location !== undefined) update.set('location', b.location);
+  if (b.location !== undefined) update.set('location', String(b.location ?? '').trim());
   if (b.estimatedCallVolume !== undefined)
-    update.set('estimated_call_volume', b.estimatedCallVolume);
-  if (b.employeeCount !== undefined) update.set('employee_count', b.employeeCount);
+    update.set('estimated_call_volume', b.estimatedCallVolume !== '' && b.estimatedCallVolume != null ? Number(b.estimatedCallVolume) || null : null);
+  if (b.employeeCount !== undefined) update.set('employee_count', b.employeeCount !== '' && b.employeeCount != null ? Number(b.employeeCount) || null : null);
   if (b.intent !== undefined) update.set('intent', emptyToNull(b.intent));
-  if (b.offeredPrice !== undefined) update.set('offered_price', b.offeredPrice);
-  if (b.primaryContactId !== undefined) update.set('primary_contact_id', b.primaryContactId);
-  if (b.lastContacted !== undefined) update.set('last_contacted', b.lastContacted);
-  if (b.nextFollowUp !== undefined) update.set('next_follow_up', b.nextFollowUp);
-  if (b.notes !== undefined) update.set('notes', b.notes);
-  if (b.sourceLink !== undefined) update.set('source_link', b.sourceLink);
-  if (b.companyWebsite !== undefined) update.set('company_website', b.companyWebsite);
-  if (b.linkedInCompany !== undefined) update.set('linkedin_company', b.linkedInCompany);
+  if (b.offeredPrice !== undefined) update.set('offered_price', b.offeredPrice !== '' && b.offeredPrice != null ? Number(b.offeredPrice) || null : null);
+  if (b.primaryContactId !== undefined) update.set('primary_contact_id', b.primaryContactId ? String(b.primaryContactId).trim() : null);
+  if (b.lastContacted !== undefined) update.set('last_contacted', b.lastContacted ? String(b.lastContacted).slice(0, 10) : null);
+  if (b.nextFollowUp !== undefined) update.set('next_follow_up', b.nextFollowUp ? String(b.nextFollowUp).slice(0, 10) : null);
+  if (b.notes !== undefined) update.set('notes', String(b.notes ?? ''));
+  if (b.sourceLink !== undefined) update.set('source_link', String(b.sourceLink ?? '').trim());
+  if (b.companyWebsite !== undefined) update.set('company_website', String(b.companyWebsite ?? '').trim());
+  if (b.linkedInCompany !== undefined) update.set('linkedin_company', String(b.linkedInCompany ?? '').trim());
   if (b.description !== undefined) update.set('description', String(b.description ?? ''));
   if (b.leadSource !== undefined) update.set('lead_source', String(b.leadSource ?? 'manual'));
   if (b.rawInputText !== undefined) update.set('raw_input_text', String(b.rawInputText ?? ''));
@@ -989,22 +989,24 @@ app.post('/api/contacts', requireAuth, async (req, res) => {
     `
     INSERT INTO contacts (
       contact_name, company_id, role, phone, email, linkedin_profile,
-      contact_status, champion, last_contacted, next_follow_up, notes
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      contact_status, champion, last_contacted, next_follow_up, notes, description, raw_input_text
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
     RETURNING *
     `,
     [
-      b.contactName,
-      b.companyId ?? null,
-      b.role ?? '',
-      b.phone ?? '',
-      b.email ?? '',
-      b.linkedInProfile ?? '',
+      String(b.contactName ?? '').trim(),
+      b.companyId ? String(b.companyId).trim() : null,
+      String(b.role ?? '').trim(),
+      String(b.phone ?? '').trim(),
+      String(b.email ?? '').trim(),
+      String(b.linkedInProfile ?? '').trim(),
       contactStatus,
-      b.champion ?? false,
-      b.lastContacted ?? null,
-      b.nextFollowUp ?? null,
-      b.notes ?? '',
+      Boolean(b.champion),
+      b.lastContacted ? String(b.lastContacted).slice(0, 10) : null,
+      b.nextFollowUp ? String(b.nextFollowUp).slice(0, 10) : null,
+      String(b.notes ?? ''),
+      String(b.description ?? ''),
+      String(b.rawInputText ?? ''),
     ]
   );
   const contact = rows[0];
@@ -1043,12 +1045,12 @@ app.patch('/api/contacts/:id', requireAuth, async (req, res) => {
 
   const update = sqlUpdateBuilder();
 
-  if (b.contactName !== undefined) update.set('contact_name', b.contactName);
-  if (b.companyId !== undefined) update.set('company_id', b.companyId);
-  if (b.role !== undefined) update.set('role', b.role);
-  if (b.phone !== undefined) update.set('phone', b.phone);
-  if (b.email !== undefined) update.set('email', b.email);
-  if (b.linkedInProfile !== undefined) update.set('linkedin_profile', b.linkedInProfile);
+  if (b.contactName !== undefined) update.set('contact_name', String(b.contactName).trim());
+  if (b.companyId !== undefined) update.set('company_id', b.companyId ? String(b.companyId).trim() : null);
+  if (b.role !== undefined) update.set('role', String(b.role ?? '').trim());
+  if (b.phone !== undefined) update.set('phone', String(b.phone ?? '').trim());
+  if (b.email !== undefined) update.set('email', String(b.email ?? '').trim());
+  if (b.linkedInProfile !== undefined) update.set('linkedin_profile', String(b.linkedInProfile ?? '').trim());
   if (b.contactStatus !== undefined) {
     const settings = await getAppSettings();
     if (!isAllowedContactStatus(settings, b.contactStatus)) {
@@ -1059,10 +1061,12 @@ app.patch('/api/contacts/:id', requireAuth, async (req, res) => {
     }
     update.set('contact_status', b.contactStatus);
   }
-  if (b.champion !== undefined) update.set('champion', b.champion);
-  if (b.lastContacted !== undefined) update.set('last_contacted', b.lastContacted);
-  if (b.nextFollowUp !== undefined) update.set('next_follow_up', b.nextFollowUp);
-  if (b.notes !== undefined) update.set('notes', b.notes);
+  if (b.champion !== undefined) update.set('champion', Boolean(b.champion));
+  if (b.lastContacted !== undefined) update.set('last_contacted', b.lastContacted ? String(b.lastContacted).slice(0, 10) : null);
+  if (b.nextFollowUp !== undefined) update.set('next_follow_up', b.nextFollowUp ? String(b.nextFollowUp).slice(0, 10) : null);
+  if (b.notes !== undefined) update.set('notes', String(b.notes ?? ''));
+  if (b.description !== undefined) update.set('description', String(b.description ?? ''));
+  if (b.rawInputText !== undefined) update.set('raw_input_text', String(b.rawInputText ?? ''));
 
   if (update.isEmpty) {
     res.status(400).json({ error: 'No fields to update' });

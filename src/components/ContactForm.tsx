@@ -32,16 +32,21 @@ export function ContactForm({
     linkedInProfile: initial?.linkedInProfile ?? '',
     contactStatus: initial?.contactStatus ?? contactStatuses[0] ?? 'Not Contacted',
     champion: initial?.champion ?? false,
-    lastContacted: initial?.lastContacted ?? '',
-    nextFollowUp: initial?.nextFollowUp ?? '',
+    lastContacted: initial?.lastContacted ? String(initial.lastContacted).slice(0, 10) : '',
+    nextFollowUp: initial?.nextFollowUp ? String(initial.nextFollowUp).slice(0, 10) : '',
     description: initial?.description ?? '',
     notes: initial?.notes ?? '',
   });
   const [stageBusy, setStageBusy] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
 
-  const set = (key: string, value: string | boolean) => setForm((f) => ({ ...f, [key]: value }));
+  const set = (key: string, value: string | boolean) => {
+    setError(null);
+    setForm((f) => ({ ...f, [key]: value }));
+  };
 
   const linkedCompany = form.companyId
     ? store.companies.find((c) => c.id === form.companyId)
@@ -50,10 +55,13 @@ export function ContactForm({
   const onCompanyStageChange = async (stage: string) => {
     if (!form.companyId || !linkedCompany || stage === linkedCompany.stage) return;
     setStageBusy(true);
+    setError(null);
     try {
       await store.moveCompanyStage(form.companyId, stage as Stage, {
         stageChangeSource: 'contact_form',
       });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update company stage');
     } finally {
       setStageBusy(false);
     }
@@ -61,29 +69,41 @@ export function ContactForm({
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!form.contactName.trim()) return;
-
-    const payload = {
-      contactName: form.contactName.trim(),
-      companyId: form.companyId || null,
-      role: form.role,
-      phone: form.phone,
-      email: form.email,
-      linkedInProfile: normalizeOptionalUrl(form.linkedInProfile),
-      contactStatus: form.contactStatus,
-      champion: form.champion,
-      lastContacted: form.lastContacted || null,
-      nextFollowUp: form.nextFollowUp || null,
-      description: form.description.trim(),
-      notes: form.notes,
-    };
-
-    if (initial) {
-      await store.updateContact(initial.id, payload);
-    } else {
-      await store.addContact(payload);
+    if (!form.contactName.trim()) {
+      setError('Contact name is required');
+      return;
     }
-    onDone();
+
+    setBusy(true);
+    setError(null);
+    try {
+      const payload = {
+        contactName: form.contactName.trim(),
+        companyId: form.companyId ? form.companyId.trim() : null,
+        role: form.role.trim(),
+        phone: form.phone.trim(),
+        email: form.email.trim(),
+        linkedInProfile: normalizeOptionalUrl(form.linkedInProfile),
+        contactStatus: form.contactStatus,
+        champion: form.champion,
+        lastContacted: form.lastContacted ? form.lastContacted.slice(0, 10) : null,
+        nextFollowUp: form.nextFollowUp ? form.nextFollowUp.slice(0, 10) : null,
+        description: form.description.trim(),
+        notes: form.notes.trim(),
+      };
+
+      if (initial) {
+        await store.updateContact(initial.id, payload);
+      } else {
+        await store.addContact(payload);
+      }
+      onDone();
+    } catch (err) {
+      console.error('Contact save failed:', err);
+      setError(err instanceof Error ? err.message : 'Failed to save contact');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -263,12 +283,19 @@ export function ContactForm({
         </p>
       )}
 
+      {error ? (
+        <p className="rounded-none border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+          {error}
+        </p>
+      ) : null}
+
       <div className="flex items-center justify-between gap-3 border-t border-[var(--color-line)] pt-4">
         {initial && store.canDelete ? (
           <button
             type="button"
             className="text-sm text-rose-600 hover:underline"
             onClick={() => setConfirmDelete(true)}
+            disabled={busy || deleteBusy}
           >
             Delete contact
           </button>
@@ -276,11 +303,11 @@ export function ContactForm({
           <span />
         )}
         <div className="flex gap-2">
-          <button type="button" className={btnGhost} onClick={onDone}>
+          <button type="button" className={btnGhost} onClick={onDone} disabled={busy}>
             Cancel
           </button>
-          <button type="submit" className={btnPrimary}>
-            {initial ? 'Save changes' : 'Add contact'}
+          <button type="submit" className={btnPrimary} disabled={busy}>
+            {busy ? 'Saving…' : initial ? 'Save changes' : 'Add contact'}
           </button>
         </div>
       </div>
