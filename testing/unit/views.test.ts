@@ -6,6 +6,7 @@ import {
   buildPipelineInsights,
   dateRangeStartIso,
   filterCompanies,
+  isoDateOffset,
   startOfMonthIso,
   startOfWeekIso,
   todayIso,
@@ -332,7 +333,7 @@ describe('applyPipelineFilters', () => {
       id: '3',
       companyName: 'Mid Follow',
       stage: 'Follow-up',
-      createdAt: '2026-07-01T00:00:00.000Z',
+      createdAt: `${isoDateOffset(-10)}T10:00:00.000Z`,
     }),
   ];
 
@@ -348,11 +349,12 @@ describe('applyPipelineFilters', () => {
   });
 
   it('applies custom inclusive date bounds', () => {
+    const midDate = isoDateOffset(-10);
     expect(
       applyPipelineFilters(companies, 'All Companies', {
         dateRange: 'custom',
-        customFrom: '2026-07-01',
-        customTo: '2026-07-01',
+        customFrom: midDate,
+        customTo: midDate,
       }).map((c) => c.id)
     ).toEqual(['3']);
 

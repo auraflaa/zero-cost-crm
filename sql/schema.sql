@@ -169,6 +169,94 @@ ALTER TABLE app_settings
 ALTER TABLE companies
   ADD COLUMN IF NOT EXISTS discovery_answers JSONB NOT NULL DEFAULT '{}'::jsonb;
 
+ALTER TABLE app_settings
+  ADD COLUMN IF NOT EXISTS icp_description TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE app_settings
+  ADD COLUMN IF NOT EXISTS subscription_plan TEXT NOT NULL DEFAULT 'plus' CHECK (subscription_plan IN ('plus','pro','enterprise'));
+
+ALTER TABLE app_settings
+  ADD COLUMN IF NOT EXISTS subscription_updated_at TIMESTAMPTZ;
+
+ALTER TABLE app_settings
+  ADD COLUMN IF NOT EXISTS subscription_updated_at TIMESTAMPTZ;
+
+ALTER TABLE companies
+  ADD COLUMN IF NOT EXISTS lead_score SMALLINT CHECK (lead_score IS NULL OR (lead_score >= 0 AND lead_score <= 10));
+
+ALTER TABLE companies
+  ADD COLUMN IF NOT EXISTS lead_score_reasons JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+ALTER TABLE companies
+  ADD COLUMN IF NOT EXISTS lead_scored_at TIMESTAMPTZ;
+
+-- Rescale existing 0-100 → 0-10 before enforcing new check (idempotent)
+UPDATE companies SET lead_score = LEAST(10, GREATEST(0, ROUND(lead_score / 10.0))) WHERE lead_score IS NOT NULL AND lead_score > 10;
+
+DO $$ BEGIN
+  BEGIN
+    ALTER TABLE companies DROP CONSTRAINT IF EXISTS companies_lead_score_check;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+  BEGIN
+    ALTER TABLE companies ADD CONSTRAINT companies_lead_score_check CHECK (lead_score IS NULL OR (lead_score >= 0 AND lead_score <= 10));
+  EXCEPTION WHEN DUPLICATE_OBJECT THEN NULL;
+  END;
+END $$;
+
+-- Descriptions for richer ICP scoring (company/contact context)
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT '';
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS lead_source TEXT CHECK (lead_source IN ('manual','bulk','single','voice','image') ) DEFAULT 'manual';
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS raw_input_text TEXT NOT NULL DEFAULT '';
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS lead_score_error TEXT;
+
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT '';
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS raw_input_text TEXT NOT NULL DEFAULT '';
+
+-- Two-stage AI extraction jobs (voice / image / bulk)
+CREATE TABLE IF NOT EXISTS extraction_jobs (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id         UUID REFERENCES users(id) ON DELETE SET NULL,
+  source_type     TEXT NOT NULL CHECK (source_type IN ('voice','image','bulk','single','manual')),
+  status          TEXT NOT NULL DEFAULT 'transcribed' CHECK (status IN ('transcribed','parsed','imported','failed')),
+  transcript      TEXT NOT NULL DEFAULT '',
+  image_url       TEXT,
+  extracted_rows  JSONB NOT NULL DEFAULT '[]'::jsonb,
+  error           TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS extraction_jobs_user_idx ON extraction_jobs (user_id, created_at DESC);
+
+-- Lead scoring history / audit (0-10)
+CREATE TABLE IF NOT EXISTS lead_scores (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id      UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  score           SMALLINT NOT NULL CHECK (score BETWEEN 0 AND 10),
+  reasons         JSONB NOT NULL DEFAULT '[]'::jsonb,
+  icp_snapshot    TEXT NOT NULL DEFAULT '',
+  model           TEXT NOT NULL DEFAULT 'mock',
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+UPDATE lead_scores SET score = LEAST(10, GREATEST(0, ROUND(score / 10.0))) WHERE score > 10;
+
+DO $$ BEGIN
+  BEGIN
+    ALTER TABLE lead_scores DROP CONSTRAINT IF EXISTS lead_scores_score_check;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+  BEGIN
+    ALTER TABLE lead_scores ADD CONSTRAINT lead_scores_score_check CHECK (score BETWEEN 0 AND 10);
+  EXCEPTION WHEN DUPLICATE_OBJECT THEN NULL;
+  END;
+END $$;
+
+CREATE INDEX IF NOT EXISTS lead_scores_company_idx ON lead_scores (company_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS companies_lead_score_idx ON companies (lead_score) WHERE lead_score IS NULL;
+CREATE INDEX IF NOT EXISTS companies_raw_input_idx ON companies (lead_source);
+
 -- ─── Daily import staging ──────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS lead_imports (
@@ -207,9 +295,14 @@ CREATE TABLE IF NOT EXISTS conversations (
   upload_status   TEXT NOT NULL DEFAULT 'pending'
     CHECK (upload_status IN ('pending', 'completed')),
   notes           TEXT,
+  transcript      TEXT NOT NULL DEFAULT '',
+  analysis        JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS transcript TEXT NOT NULL DEFAULT '';
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS analysis JSONB NOT NULL DEFAULT '{}'::jsonb;
 
 CREATE INDEX IF NOT EXISTS conversations_contact_idx ON conversations (contact_id);
 CREATE INDEX IF NOT EXISTS conversations_company_idx ON conversations (company_id);

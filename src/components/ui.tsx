@@ -106,12 +106,6 @@ export function SearchInput({
 }: SearchInputProps) {
   return (
     <div className="relative min-w-0 flex-1">
-      <span
-        aria-hidden
-        className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-stone-400"
-      >
-        ⌕
-      </span>
       <input
         type="search"
         data-testid={testId}
@@ -124,7 +118,7 @@ export function SearchInput({
         }}
         placeholder={placeholder}
         aria-label={placeholder}
-        className={`${inputClass} pl-9`}
+        className={inputClass}
       />
     </div>
   );
@@ -298,7 +292,7 @@ export function FilterDropdown({
                             : 'border-stone-300 bg-white'
                         }`}
                       >
-                        {isOn ? '✓' : ''}
+                        {isOn ? 'x' : ''}
                       </span>
                     ) : null}
                     <span className="min-w-0 truncate">{opt.label}</span>
@@ -333,7 +327,7 @@ export function FilterDropdown({
         <span className="opacity-70">{label}:</span>
         <span>{summary}</span>
         <span aria-hidden className="opacity-60">
-          ▾
+          v
         </span>
       </button>
       {panel}
@@ -356,7 +350,7 @@ export function FilterChip({ label, onClear }: FilterChipProps) {
         aria-label={`Clear ${label}`}
         className="text-teal-700 hover:text-teal-950"
       >
-        ×
+        x
       </button>
     </span>
   );

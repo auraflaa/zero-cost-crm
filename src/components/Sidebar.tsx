@@ -1,6 +1,5 @@
 import type { Page } from '../types';
 import { navItemsForRole } from '../lib/nav';
-import { ConvobrainsBridge } from './ConvobrainsBridge';
 
 interface SidebarProps {
   page: Page;
@@ -59,7 +58,6 @@ export function Sidebar({
       </nav>
 
       <div className="shrink-0 space-y-3 border-t border-[var(--color-line)] p-4">
-        <ConvobrainsBridge />
         <p className="text-[11px] text-stone-500">
           Signed in as <span className="font-medium text-stone-700">{userName}</span>
         </p>

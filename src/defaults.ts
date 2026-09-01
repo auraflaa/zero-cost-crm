@@ -63,3 +63,5 @@ export interface DiscoveryQuestion {
 }
 
 export const DEFAULT_DISCOVERY_QUESTIONS: DiscoveryQuestion[] = [];
+
+export const DEFAULT_ICP_DESCRIPTION = '';

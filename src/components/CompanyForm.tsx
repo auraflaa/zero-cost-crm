@@ -3,7 +3,7 @@ import type { Company, DiscoveryQuestion } from '../types';
 import { INDUSTRIES, INTENTS } from '../types';
 import { DEFAULT_STAGES } from '../defaults';
 import type { CrmStore } from '../hooks/useCrmStore';
-import { Field, inputClass, btnPrimary, btnGhost } from './ui';
+import { Field, inputClass, btnPrimary, btnGhost, Modal } from './ui';
 import {
   activityDetailLines,
   eventTypeLabel,
@@ -71,6 +71,7 @@ export function CompanyForm({
     sourceLink: initial?.sourceLink ?? '',
     companyWebsite: initial?.companyWebsite ?? '',
     linkedInCompany: initial?.linkedInCompany ?? '',
+    description: (initial as unknown as { description?: string })?.description ?? '',
   });
   const [discoveryAnswers, setDiscoveryAnswers] = useState<Record<string, string>>(() => ({
     ...(initial?.discoveryAnswers ?? {}),
@@ -80,6 +81,8 @@ export function CompanyForm({
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const historyEndRef = useRef<HTMLDivElement | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   const discoverySections = useMemo(() => groupQuestions(discoveryQuestions), [discoveryQuestions]);
 
@@ -136,6 +139,7 @@ export function CompanyForm({
       companyWebsite: normalizeOptionalUrl(form.companyWebsite),
       linkedInCompany: normalizeOptionalUrl(form.linkedInCompany),
       discoveryAnswers,
+      description: form.description.trim(),
     };
 
     if (initial) {
@@ -253,7 +257,7 @@ export function CompanyForm({
             {contactOptions.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.contactName}
-                {t.champion ? ' ★' : ''}
+                {t.champion ? ' (Champion)' : ''}
               </option>
             ))}
           </select>
@@ -318,6 +322,16 @@ export function CompanyForm({
             onChange={(e) => set('sourceLink', e.target.value)}
             placeholder="URL or import tag"
           />
+        </Field>
+
+        <Field label="Description (for AI scoring — 1-sentence ICP context)" className="sm:col-span-2">
+          <textarea
+            className={`${inputClass} min-h-[60px] resize-y text-sm`}
+            value={form.description}
+            onChange={(e) => set('description', e.target.value)}
+            placeholder="e.g. B2B SaaS 120-person Bengaluru team needing sales automation"
+          />
+          <p className="mt-1 text-xs text-stone-500">Used with ICP for lead scoring. Leave empty if unknown.</p>
         </Field>
 
         <Field label="Notes" className="sm:col-span-2">
@@ -427,12 +441,7 @@ export function CompanyForm({
           <button
             type="button"
             className="text-sm text-rose-600 hover:underline"
-            onClick={async () => {
-              if (confirm(`Delete ${initial.companyName}?`)) {
-                await store.deleteCompany(initial.id);
-                onDone();
-              }
-            }}
+            onClick={() => setConfirmDelete(true)}
           >
             Delete company
           </button>
@@ -448,6 +457,36 @@ export function CompanyForm({
           </button>
         </div>
       </div>
+
+      {initial ? (
+        <Modal open={confirmDelete} title={`Delete ${initial.companyName}?`} onClose={() => setConfirmDelete(false)}>
+          <p className="text-sm text-stone-600">
+            This will permanently delete <span className="font-semibold text-stone-900">{initial.companyName}</span> and unlink its contacts. This action cannot be undone.
+          </p>
+          <div className="mt-6 flex justify-end gap-2">
+            <button type="button" className={btnGhost} onClick={() => setConfirmDelete(false)} disabled={deleteBusy}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className={btnPrimary + ' bg-rose-600 hover:bg-rose-700'}
+              disabled={deleteBusy}
+              onClick={async () => {
+                setDeleteBusy(true);
+                try {
+                  await store.deleteCompany(initial.id);
+                  setConfirmDelete(false);
+                  onDone();
+                } finally {
+                  setDeleteBusy(false);
+                }
+              }}
+            >
+              {deleteBusy ? 'Deleting…' : 'Delete'}
+            </button>
+          </div>
+        </Modal>
+      ) : null}
     </form>
   );
 }

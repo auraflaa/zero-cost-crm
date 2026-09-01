@@ -109,6 +109,22 @@ export async function deleteObject(key: string) {
   await s3().send(new DeleteObjectCommand({ Bucket: bucket(), Key: key }));
 }
 
+export async function getObjectBuffer(key: string): Promise<Buffer> {
+  const out = await s3().send(new GetObjectCommand({ Bucket: bucket(), Key: key }));
+  const body = out.Body as unknown as { transformToByteArray?: () => Promise<Uint8Array>; on?: (ev: string, cb: (c: Buffer) => void) => void };
+  if (body && typeof (body as { transformToByteArray?: unknown }).transformToByteArray === 'function') {
+    const bytes = await (body as { transformToByteArray: () => Promise<Uint8Array> }).transformToByteArray();
+    return Buffer.from(bytes);
+  }
+  // Fallback stream
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    (body as unknown as NodeJS.ReadableStream).on('data', (c: Buffer) => chunks.push(Buffer.from(c)));
+    (body as unknown as NodeJS.ReadableStream).on('end', () => resolve(Buffer.concat(chunks)));
+    (body as unknown as NodeJS.ReadableStream).on('error', reject);
+  });
+}
+
 export function contentTypeForExt(ext: string): string {
   switch (ext) {
     case 'mp3':

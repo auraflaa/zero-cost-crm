@@ -53,6 +53,12 @@ export interface Company {
   linkedInCompany: string;
   /** questionId → answer string */
   discoveryAnswers: Record<string, string>;
+  leadScore: number | null;
+  leadScoreReasons: string[];
+  leadScoredAt: string | null;
+  description: string;
+  leadSource: string | null;
+  rawInputText: string;
   createdAt: string;
 }
 
@@ -69,11 +75,20 @@ export interface Contact {
   lastContacted: string | null;
   nextFollowUp: string | null;
   notes: string;
+  description: string;
+  rawInputText: string;
   createdAt: string;
 }
 
 export type Page =
-  'dashboard' | 'pipeline' | 'contacts' | 'import' | 'users' | 'activity' | 'settings';
+  | 'dashboard'
+  | 'pipeline'
+  | 'contacts'
+  | 'import'
+  | 'users'
+  | 'activity'
+  | 'settings'
+  | 'subscription';
 
 export type PipelineView =
   | 'All Companies'
@@ -101,6 +116,7 @@ export type ContactSortKey =
   | 'companyName'
   | 'contactStatus'
   | 'stage'
+  | 'leadScore'
   | 'nextFollowUp'
   | 'lastContacted'
   | 'createdAt';
@@ -142,6 +158,9 @@ export interface ProspectRow {
   location: string;
   employees: number | null;
   industry: string;
+  description?: string;
+  rawInputText?: string;
+  leadSource?: string;
 }
 
 export interface ImportResult {
@@ -189,6 +208,8 @@ export interface Conversation {
   calledAt: string;
   s3Url: string;
   notes: string;
+  transcript: string;
+  analysis: { score?: number; reasons?: string[]; tier?: string; summary?: string };
 }
 
 /** Public + authenticated instance config from GET /api/config */
@@ -200,6 +221,7 @@ export interface AppConfig {
   contactStatuses: string[];
   championStatusToStage: Record<string, string | null>;
   discoveryQuestions: import('./defaults.js').DiscoveryQuestion[];
+  icpDescription: string;
   allowedEmailDomain: string | null;
   allowedEmailDomains: string[];
   allowAnyEmailDomain: boolean;

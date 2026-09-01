@@ -204,7 +204,7 @@ describe('buildChampionTrail', () => {
         contactStatus: 'Interested',
       })
     );
-    expect(trail?.header).toBe('★ Priya Sharma · Interested');
+    expect(trail?.header).toBe('Priya Sharma · Interested');
   });
 
   it('returns a null note when the champion has no notes', () => {

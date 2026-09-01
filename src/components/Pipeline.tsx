@@ -27,6 +27,7 @@ import {
   statusColor,
 } from '../lib/views';
 import { buildCardBadges, buildChampionTrail, findChampion, istToday } from '../lib/championCard';
+import { scoreColor } from '../lib/leadScoring';
 import { logViewEvent } from '../lib/activity';
 import { CompanyForm } from './CompanyForm';
 import { FilterChip, FilterDropdown, Modal, SearchInput, btnPrimary, inputClass } from './ui';
@@ -99,7 +100,7 @@ function CompanyCard({
                 className="rounded-none bg-teal-100 px-1.5 py-0.5 text-[10px] font-semibold text-teal-800"
                 title="Has champion"
               >
-                ★ Champion
+                Champion
               </span>
             ) : null}
             {badges.followUpDueToday ? (
@@ -136,6 +137,15 @@ function CompanyCard({
               className={`rounded-none px-2 py-0.5 text-[10px] font-semibold ${intentColor(company.intent)}`}
             >
               {company.intent}
+            </span>
+          ) : null}
+          {company.leadScore != null ? (
+            <span
+              className={`rounded-none px-2 py-0.5 text-[10px] font-semibold ${scoreColor(company.leadScore)}`}
+              title={company.leadScoreReasons.join(' · ')}
+              data-testid="lead-score"
+            >
+              {company.leadScore}
             </span>
           ) : null}
           <span

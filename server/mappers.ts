@@ -43,6 +43,12 @@ export function mapCompany(row: Record<string, unknown>): Company {
     companyWebsite: String(row.company_website ?? ''),
     linkedInCompany: String(row.linkedin_company ?? ''),
     discoveryAnswers,
+    leadScore: row.lead_score != null ? Number(row.lead_score) : null,
+    leadScoreReasons: Array.isArray(row.lead_score_reasons) ? (row.lead_score_reasons as string[]) : [],
+    leadScoredAt: pgTimestampToIso(row.lead_scored_at),
+    description: String(row.description ?? ''),
+    leadSource: row.lead_source ? String(row.lead_source) : null,
+    rawInputText: String(row.raw_input_text ?? ''),
     createdAt: pgDateToIso(row.created_at) ?? '',
   };
 }
@@ -61,6 +67,8 @@ export function mapContact(row: Record<string, unknown>): Contact {
     lastContacted: pgDateToIso(row.last_contacted),
     nextFollowUp: pgDateToIso(row.next_follow_up),
     notes: String(row.notes ?? ''),
+    description: String((row as Record<string, unknown>).description ?? ''),
+    rawInputText: String((row as Record<string, unknown>).raw_input_text ?? ''),
     createdAt: pgDateToIso(row.created_at) ?? '',
   };
 }
@@ -75,6 +83,16 @@ function pgTimestampToIso(val: unknown): string | null {
 }
 
 export function mapConversation(row: Record<string, unknown>): Conversation {
+  let analysis: Conversation['analysis'] = {};
+  const raw = row.analysis;
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) analysis = raw as Conversation['analysis'];
+  else if (typeof raw === 'string') {
+    try {
+      analysis = JSON.parse(raw);
+    } catch {
+      analysis = {};
+    }
+  }
   return {
     id: String(row.id),
     companyId: String(row.company_id),
@@ -87,5 +105,7 @@ export function mapConversation(row: Record<string, unknown>): Conversation {
     calledAt: pgTimestampToIso(row.called_at) ?? '',
     s3Url: String(row.s3_url ?? ''),
     notes: String(row.notes ?? ''),
+    transcript: String(row.transcript ?? ''),
+    analysis,
   };
 }

@@ -1,7 +1,6 @@
 import type { CrmStore } from '../hooks/useCrmStore';
 import type { Page } from '../types';
 import { btnPrimary, btnGhost } from './ui';
-import { ConvobrainsBridge } from './ConvobrainsBridge';
 
 interface DashboardProps {
   store: CrmStore;
@@ -183,11 +182,7 @@ export function Dashboard({
         </ol>
       </section>
 
-      {metrics.closedLost > 0 ? (
-        <ConvobrainsBridge variant="lost" />
-      ) : (
-        <ConvobrainsBridge variant="panel" />
-      )}
+      {null}
     </div>
   );
 }

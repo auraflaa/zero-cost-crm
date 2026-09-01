@@ -11,6 +11,7 @@ import { Contacts } from './components/Contacts';
 import { ImportLeads } from './components/ImportLeads';
 import { Users } from './components/Users';
 import { SettingsPage } from './components/SettingsPage';
+import { SubscriptionPage } from './components/SubscriptionPage';
 import { LoginPage } from './components/LoginPage';
 import { PAGE_TITLE } from './lib/nav';
 
@@ -28,6 +29,7 @@ const ALL_PAGES: Page[] = [
   'activity',
   'users',
   'settings',
+  'subscription',
 ];
 
 function readQuery(): { page: Page | null; companyId: string | null } {
@@ -250,6 +252,7 @@ export default function App() {
         {page === 'settings' && manageUsers ? (
           <SettingsPage config={config} onSaved={auth.refreshConfig} />
         ) : null}
+        {page === 'subscription' ? <SubscriptionPage /> : null}
       </main>
 
       <MobileNav page={page} onNavigate={navigate} userRole={auth.user.role} />

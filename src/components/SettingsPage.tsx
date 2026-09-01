@@ -21,6 +21,7 @@ export function SettingsPage({ config, onSaved }: SettingsPageProps) {
   const [logoUrl, setLogoUrl] = useState(config.logoUrl);
   const [stagesText, setStagesText] = useState(config.stages.join('\n'));
   const [statusesText, setStatusesText] = useState(config.contactStatuses.join('\n'));
+  const [icpDescription, setIcpDescription] = useState(config.icpDescription ?? '');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -31,6 +32,7 @@ export function SettingsPage({ config, onSaved }: SettingsPageProps) {
     setLogoUrl(config.logoUrl);
     setStagesText(config.stages.join('\n'));
     setStatusesText(config.contactStatuses.join('\n'));
+    setIcpDescription(config.icpDescription ?? '');
   }, [config]);
 
   const domainHint = useMemo(() => {
@@ -53,6 +55,7 @@ export function SettingsPage({ config, onSaved }: SettingsPageProps) {
           logoUrl,
           stages: linesToList(stagesText),
           contactStatuses: linesToList(statusesText),
+          icpDescription,
         }),
       });
       await onSaved();
@@ -134,6 +137,18 @@ export function SettingsPage({ config, onSaved }: SettingsPageProps) {
             required
           />
         </Field>
+        <Field label="Ideal Customer Profile (ICP) — used for AI lead scoring">
+          <textarea
+            className={`${inputClass} min-h-28 text-sm`}
+            value={icpDescription}
+            onChange={(e) => setIcpDescription(e.target.value)}
+            placeholder="E.g. B2B SaaS companies in India, 50-500 employees, Healthcare or BFSI, looking for sales automation..."
+            rows={4}
+          />
+          <p className="mt-1 text-xs text-stone-500">
+            Voice, image and bulk imports are scored against this description via AI. Leave empty to use neutral scoring.
+          </p>
+        </Field>
 
         <p className="text-xs text-stone-500">Login email policy: {domainHint}</p>
 
@@ -153,6 +168,7 @@ export function SettingsPage({ config, onSaved }: SettingsPageProps) {
               setLogoUrl(config.logoUrl);
               setStagesText(config.stages.join('\n'));
               setStatusesText(config.contactStatuses.join('\n'));
+              setIcpDescription(config.icpDescription ?? '');
               setError(null);
               setMessage(null);
             }}

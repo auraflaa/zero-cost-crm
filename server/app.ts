@@ -40,6 +40,11 @@ import {
   asDiscoveryQuestions,
   type SettingsPatch,
 } from './settings.js';
+import { scoreProspect as scoreProspectLocal } from '../src/lib/leadScoring.js';
+import { scoreProspectsAI } from './ai/scoring.js';
+import { extractFromVoice, extractFromImage } from './ai/extract.js';
+import { getCurrentPlan, hasFeature, type Feature } from './subscription.js';
+import type { ProspectRow } from '../src/types.js';
 
 const app = express();
 app.use(
@@ -153,6 +158,8 @@ app.get('/api/config', async (_req, res) => {
       contactStatuses: settings.contactStatuses,
       championStatusToStage: settings.championStatusToStage,
       discoveryQuestions: settings.discoveryQuestions,
+      icpDescription: settings.icpDescription,
+      subscriptionPlan: settings.subscriptionPlan,
       allowedEmailDomain: config.primaryEmailDomain,
       allowedEmailDomains: config.allowedEmailAny ? ['*'] : config.allowedEmailDomains,
       allowAnyEmailDomain: config.allowedEmailAny,
@@ -188,6 +195,7 @@ app.patch('/api/settings', requireAuth, requireAdmin, async (req, res) => {
   if (Array.isArray(b.discoveryQuestions)) {
     patch.discoveryQuestions = asDiscoveryQuestions(b.discoveryQuestions);
   }
+  if (typeof b.icpDescription === 'string') patch.icpDescription = b.icpDescription;
 
   try {
     const settings = await updateAppSettings(patch);
@@ -199,6 +207,8 @@ app.patch('/api/settings', requireAuth, requireAdmin, async (req, res) => {
       contactStatuses: settings.contactStatuses,
       championStatusToStage: settings.championStatusToStage,
       discoveryQuestions: settings.discoveryQuestions,
+      icpDescription: settings.icpDescription,
+      subscriptionPlan: settings.subscriptionPlan,
       updatedAt: settings.updatedAt,
     });
   } catch (e) {
@@ -207,6 +217,44 @@ app.patch('/api/settings', requireAuth, requireAdmin, async (req, res) => {
     });
   }
 });
+
+// ─── Subscription (Plus / Pro / Enterprise) ─────────────────────────────────
+
+app.get('/api/subscription', requireAuth, async (_req, res) => {
+  const plan = await getCurrentPlan();
+  res.json({
+    plan,
+    features: {
+      voice_ai: hasFeature(plan, 'voice_ai'),
+      image_ai: hasFeature(plan, 'image_ai'),
+      lead_scoring: hasFeature(plan, 'lead_scoring'),
+      call_analysis: hasFeature(plan, 'call_analysis'),
+    },
+  });
+});
+
+app.patch('/api/subscription', requireAuth, requireAdmin, async (req, res) => {
+  const raw = String((req.body as Record<string, unknown>).plan ?? '').trim().toLowerCase();
+  if (!['plus', 'pro', 'enterprise'].includes(raw)) {
+    res.status(400).json({ error: 'Invalid plan. Use plus, pro, or enterprise.' });
+    return;
+  }
+  const settings = await updateAppSettings({ subscriptionPlan: raw as 'plus' | 'pro' | 'enterprise' });
+  res.json({ plan: settings.subscriptionPlan });
+});
+
+async function requireFeatureOr402(feature: Feature, res: express.Response): Promise<boolean> {
+  const plan = await getCurrentPlan();
+  if (hasFeature(plan, feature)) return true;
+  res.status(402).json({
+    error: `This feature requires ${feature === 'voice_ai' ? 'Pro' : feature === 'image_ai' ? 'Pro' : feature === 'lead_scoring' ? 'Pro' : 'Pro'} plan. Upgrade in Subscription.`,
+    code: 'SUBSCRIPTION_REQUIRED',
+    plan,
+    feature,
+    requiredPlan: 'pro',
+  });
+  return false;
+}
 
 // ─── Auth ───────────────────────────────────────────────────────────────────
 
@@ -486,15 +534,18 @@ app.post('/api/companies', requireAuth, async (req, res) => {
         )
       : {};
   const hasDiscoveryCol = await companiesHaveDiscoveryAnswers();
+  const description = typeof b.description === 'string' ? b.description.trim() : '';
+  const rawInputText = typeof b.rawInputText === 'string' ? b.rawInputText.trim() : '';
+  const leadSource = typeof b.leadSource === 'string' && ['manual','bulk','single','voice','image'].includes(b.leadSource) ? b.leadSource : 'manual';
   const { rows } = await pool.query(
     hasDiscoveryCol
       ? `
     INSERT INTO companies (
       company_name, stage, industry, location, estimated_call_volume, employee_count,
       intent, offered_price, primary_contact_id, assigned_to, last_contacted,
-      next_follow_up, notes, source_link, company_website, linkedin_company, discovery_answers
+      next_follow_up, notes, source_link, company_website, linkedin_company, discovery_answers, description, lead_source, raw_input_text
     ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::jsonb
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::jsonb, $18, $19, $20
     )
     RETURNING id
     `
@@ -502,9 +553,9 @@ app.post('/api/companies', requireAuth, async (req, res) => {
     INSERT INTO companies (
       company_name, stage, industry, location, estimated_call_volume, employee_count,
       intent, offered_price, primary_contact_id, assigned_to, last_contacted,
-      next_follow_up, notes, source_link, company_website, linkedin_company
+      next_follow_up, notes, source_link, company_website, linkedin_company, description, lead_source, raw_input_text
     ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
     )
     RETURNING id
     `,
@@ -527,6 +578,9 @@ app.post('/api/companies', requireAuth, async (req, res) => {
           b.companyWebsite ?? '',
           b.linkedInCompany ?? '',
           JSON.stringify(answers),
+          description,
+          leadSource,
+          rawInputText,
         ]
       : [
           b.companyName,
@@ -545,10 +599,49 @@ app.post('/api/companies', requireAuth, async (req, res) => {
           b.sourceLink ?? '',
           b.companyWebsite ?? '',
           b.linkedInCompany ?? '',
+          description,
+          leadSource,
+          rawInputText,
         ]
   );
   const { rows: full } = await pool.query(`${COMPANY_SELECT} WHERE c.id = $1`, [rows[0].id]);
-  const company = mapCompany(full[0]);
+  let company = mapCompany(full[0]);
+  // Immediate scoring if Pro/Enterprise and ICP exists (gated)
+  if (hasFeature(await getCurrentPlan(), 'lead_scoring')) {
+    try {
+      const settings = await getAppSettings();
+      const icp = settings.icpDescription ?? '';
+      if (icp.trim()) {
+      const prospect = {
+        company: company.companyName,
+        prospectName: '',
+        jobTitle: '',
+        email: '',
+        phone: '',
+        location: company.location ?? '',
+        employees: company.employeeCount ?? null,
+        industry: company.industry ?? '',
+        description: company.description ?? '',
+        rawInputText: company.rawInputText ?? '',
+      };
+      const scored = scoreProspectLocal(prospect, icp);
+      await pool.query(`UPDATE companies SET lead_score=$1, lead_score_reasons=$2::jsonb, lead_scored_at=now() WHERE id=$3`, [
+        scored.score,
+        JSON.stringify(scored.reasons),
+        company.id,
+      ]);
+      await pool.query(`INSERT INTO lead_scores (company_id, score, reasons, icp_snapshot, model) VALUES ($1,$2,$3::jsonb,$4,$5)`, [
+        company.id,
+        scored.score,
+        JSON.stringify(scored.reasons),
+        icp,
+        config.ai.provider,
+      ]);
+      const { rows: rescored } = await pool.query(`${COMPANY_SELECT} WHERE c.id=$1`, [company.id]);
+      company = mapCompany(rescored[0]);
+      }
+    } catch {}
+  }
   await logActivity({
     userId: req.user!.sub,
     sessionId: req.user!.sid,
@@ -598,6 +691,9 @@ app.patch('/api/companies/:id', requireAuth, async (req, res) => {
   if (b.sourceLink !== undefined) update.set('source_link', b.sourceLink);
   if (b.companyWebsite !== undefined) update.set('company_website', b.companyWebsite);
   if (b.linkedInCompany !== undefined) update.set('linkedin_company', b.linkedInCompany);
+  if (b.description !== undefined) update.set('description', String(b.description ?? ''));
+  if (b.leadSource !== undefined) update.set('lead_source', String(b.leadSource ?? 'manual'));
+  if (b.rawInputText !== undefined) update.set('raw_input_text', String(b.rawInputText ?? ''));
   if (b.discoveryAnswers !== undefined && (await companiesHaveDiscoveryAnswers())) {
     const answers =
       b.discoveryAnswers &&
@@ -627,7 +723,51 @@ app.patch('/api/companies/:id', requireAuth, async (req, res) => {
     return;
   }
 
-  const name = String(full[0].company_name);
+  let updatedCompanyRow = full[0];
+  // Rescore if Pro/Enterprise and ICP-relevant fields changed
+  const shouldRescore =
+    b.description !== undefined ||
+    b.industry !== undefined ||
+    b.location !== undefined ||
+    b.employeeCount !== undefined ||
+    b.estimatedCallVolume !== undefined;
+  if (shouldRescore && hasFeature(await getCurrentPlan(), 'lead_scoring')) {
+    try {
+      const settings = await getAppSettings();
+      const icp = settings.icpDescription ?? '';
+      if (icp.trim()) {
+        const prospect = {
+          company: String(updatedCompanyRow.company_name),
+          prospectName: '',
+          jobTitle: '',
+          email: '',
+          phone: '',
+          location: String(updatedCompanyRow.location ?? ''),
+          employees: updatedCompanyRow.employee_count != null ? Number(updatedCompanyRow.employee_count) : null,
+          industry: String(updatedCompanyRow.industry ?? ''),
+          description: String(updatedCompanyRow.description ?? ''),
+          rawInputText: String(updatedCompanyRow.raw_input_text ?? ''),
+        };
+        const scored = scoreProspectLocal(prospect, icp);
+        await pool.query(`UPDATE companies SET lead_score=$1, lead_score_reasons=$2::jsonb, lead_scored_at=now() WHERE id=$3`, [
+          scored.score,
+          JSON.stringify(scored.reasons),
+          id,
+        ]);
+        await pool.query(`INSERT INTO lead_scores (company_id, score, reasons, icp_snapshot, model) VALUES ($1,$2,$3::jsonb,$4,$5)`, [
+          id,
+          scored.score,
+          JSON.stringify(scored.reasons),
+          icp,
+          config.ai.provider,
+        ]);
+        const { rows: rescored } = await pool.query(`${COMPANY_SELECT} WHERE c.id=$1`, [id]);
+        if (rescored[0]) updatedCompanyRow = rescored[0];
+      }
+    } catch {}
+  }
+
+  const name = String(updatedCompanyRow.company_name);
   const sid = req.user!.sid;
   const uid = req.user!.sub;
   if (b.stage !== undefined && b.stage !== before.stage) {
@@ -803,7 +943,7 @@ app.patch('/api/companies/:id', requireAuth, async (req, res) => {
     });
   }
 
-  res.json(mapCompany(full[0]));
+  res.json(mapCompany(updatedCompanyRow));
 });
 
 app.delete('/api/companies/:id', requireAuth, requireAdmin, async (req, res) => {
@@ -1187,6 +1327,9 @@ app.post('/api/import/prospects', requireAuth, async (req, res) => {
     location: string;
     employees: number | null;
     industry: string;
+    description?: string;
+    rawInputText?: string;
+    leadSource?: string;
   }>;
 
   if (!Array.isArray(rows) || rows.length === 0) {
@@ -1225,8 +1368,8 @@ app.post('/api/import/prospects', requireAuth, async (req, res) => {
           `
           INSERT INTO companies (
             company_name, stage, industry, location, employee_count,
-            assigned_to, next_follow_up, notes
-          ) VALUES ($1, 'Lead Added', $2, $3, $4, $5, $6, $7)
+            assigned_to, next_follow_up, notes, description, lead_source, raw_input_text
+          ) VALUES ($1, 'Lead Added', $2, $3, $4, $5, $6, $7, $8, $9, $10)
           RETURNING *
           `,
           [
@@ -1237,12 +1380,53 @@ app.post('/api/import/prospects', requireAuth, async (req, res) => {
             req.user!.sub,
             todayIso(),
             `Imported ${todayIso()}`,
+            row.description ?? '',
+            row.leadSource ?? 'bulk',
+            row.rawInputText ?? '',
           ]
         );
         company = ins.rows[0];
         company.assigned_to_name = req.user!.name;
         companyByName.set(key, company);
         result.companiesCreated += 1;
+
+        // Immediate AI scoring if Pro/Enterprise and ICP configured
+        const _planForScoring = await getCurrentPlan();
+        if (hasFeature(_planForScoring, 'lead_scoring')) {
+          try {
+            const settings = await getAppSettings();
+            const icp = settings.icpDescription ?? '';
+            if (icp.trim()) {
+              const prospectLike = {
+                company: row.company,
+                prospectName: row.prospectName,
+                jobTitle: row.jobTitle ?? '',
+                email: row.email ?? '',
+                phone: row.phone ?? '',
+                location: row.location ?? '',
+                employees: row.employees ?? null,
+                industry: row.industry ?? '',
+                description: row.description ?? '',
+                rawInputText: row.rawInputText ?? '',
+              };
+              const scored = scoreProspectLocal(prospectLike, icp);
+              await client.query(
+                `UPDATE companies SET lead_score=$1, lead_score_reasons=$2::jsonb, lead_scored_at=now(), description=COALESCE(NULLIF($3,''),description) WHERE id=$4`,
+                [scored.score, JSON.stringify(scored.reasons), row.description ?? '', company.id]
+              );
+              await client.query(
+                `INSERT INTO lead_scores (company_id, score, reasons, icp_snapshot, model) VALUES ($1,$2,$3::jsonb,$4,$5)`,
+                [company.id, scored.score, JSON.stringify(scored.reasons), icp, config.ai.provider]
+              );
+              await client.query(
+                `INSERT INTO extraction_jobs (user_id, source_type, status, transcript, extracted_rows) VALUES ($1,$2,'imported',$3,$4::jsonb)`,
+                [req.user!.sub, (row.leadSource === 'voice' || row.leadSource === 'image') ? row.leadSource : 'bulk', row.rawInputText ?? '', JSON.stringify([row])]
+              );
+            }
+          } catch {
+            // scoring failure does not block import
+          }
+        }
       } else if (!touchedCompanies.has(String(company.id))) {
         const patch: string[] = [];
         const vals: unknown[] = [];
@@ -1259,6 +1443,14 @@ app.post('/api/import/prospects', requireAuth, async (req, res) => {
           patch.push(`industry = $${n++}`);
           vals.push(mapIndustry(row.industry));
         }
+        if (row.description) {
+          patch.push(`description = $${n++}`);
+          vals.push(row.description);
+        }
+        if (row.rawInputText) {
+          patch.push(`raw_input_text = $${n++}`);
+          vals.push(row.rawInputText);
+        }
         if (patch.length > 0) {
           patch.push('updated_at = now()');
           vals.push(company.id);
@@ -1271,6 +1463,7 @@ app.post('/api/import/prospects', requireAuth, async (req, res) => {
           result.companiesUpdated += 1;
         }
         touchedCompanies.add(String(company.id));
+        // If company was rescored target, ensure unscored background will pick it up lazily if ICP now exists
       } else {
         company = companyByName.get(key)!;
       }
@@ -1297,11 +1490,11 @@ app.post('/api/import/prospects', requireAuth, async (req, res) => {
         const ins = await client.query(
           `
           INSERT INTO contacts (
-            contact_name, company_id, role, phone, email, contact_status
-          ) VALUES ($1, $2, $3, $4, $5, 'Not Contacted')
+            contact_name, company_id, role, phone, email, contact_status, description, raw_input_text
+          ) VALUES ($1, $2, $3, $4, $5, 'Not Contacted', $6, $7)
           RETURNING *
           `,
-          [row.prospectName, company.id, row.jobTitle ?? '', row.phone ?? '', email]
+          [row.prospectName, company.id, row.jobTitle ?? '', row.phone ?? '', email, row.description ?? '', row.rawInputText ?? '']
         );
         contactRows.unshift(ins.rows[0]);
         if (email) emailSet.add(email);
@@ -1334,12 +1527,183 @@ app.post('/api/import/prospects', requireAuth, async (req, res) => {
   }
 });
 
+// ─── AI: two-stage voice / image extraction + scoring ────────────────────────
+
+app.post('/api/import/voice/extract', requireAuth, async (req, res) => {
+  if (!(await requireFeatureOr402('voice_ai', res))) return;
+  const { transcript, audioBase64 } = req.body as { transcript?: string; audioBase64?: string };
+  try {
+    const out = await extractFromVoice({ transcript, audioBase64 });
+    // Log extraction job (text stage)
+    try {
+      await pool.query(
+        `INSERT INTO extraction_jobs (user_id, source_type, status, transcript, extracted_rows) VALUES ($1,'voice','transcribed',$2,$3::jsonb)`,
+        [req.user!.sub, out.transcript ?? transcript ?? '', JSON.stringify(out.rows)]
+      );
+    } catch {}
+    res.json(out);
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : 'Voice extraction failed' });
+  }
+});
+
+app.post('/api/import/image/extract', requireAuth, async (req, res) => {
+  if (!(await requireFeatureOr402('image_ai', res))) return;
+  const { imageBase64, mimeType, fallbackText, transcript } = req.body as {
+    imageBase64?: string;
+    mimeType?: string;
+    fallbackText?: string;
+    transcript?: string;
+  };
+  // Allow image+voice combined — non-binary: transcript optional alongside image
+  const hasImage = !!imageBase64;
+  const hasFallback = !!fallbackText?.trim();
+  const hasTranscript = !!transcript?.trim();
+  if (!hasImage && hasFallback && !hasTranscript) {
+    const { parseProspectPaste } = await import('../src/lib/importProspects.js');
+    const parsed = parseProspectPaste(fallbackText!);
+    try {
+      await pool.query(
+        `INSERT INTO extraction_jobs (user_id, source_type, status, transcript, extracted_rows) VALUES ($1,'image','transcribed',$2,$3::jsonb)`,
+        [req.user!.sub, fallbackText!, JSON.stringify(parsed.rows)]
+      );
+    } catch {}
+    res.json({ rows: parsed.rows, errors: parsed.errors, text: fallbackText, transcript });
+    return;
+  }
+  try {
+    const out = await extractFromImage({ imageBase64, mimeType, transcript, fallbackText });
+    if (hasFallback && out.rows.length === 0) {
+      const { parseProspectPaste: p } = await import('../src/lib/importProspects.js');
+      const fb = p(fallbackText!);
+      if (fb.rows.length) {
+        res.json({ rows: fb.rows, errors: fb.errors, text: fallbackText, transcript });
+        return;
+      }
+    }
+    try {
+      await pool.query(
+        `INSERT INTO extraction_jobs (user_id, source_type, status, transcript, extracted_rows) VALUES ($1,'image','parsed',$2,$3::jsonb)`,
+        [req.user!.sub, (out.transcript ?? out.text ?? fallbackText ?? '') as string, JSON.stringify(out.rows)]
+      );
+    } catch {}
+    res.json(out);
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : 'Image extraction failed' });
+  }
+});
+
+app.post('/api/ai/score', requireAuth, async (req, res) => {
+  if (!(await requireFeatureOr402('lead_scoring', res))) return;
+  const rows = req.body.rows as ProspectRow[] | undefined;
+  const icpOverride = typeof req.body.icpDescription === 'string' ? req.body.icpDescription : undefined;
+  if (!Array.isArray(rows) || rows.length === 0) {
+    res.status(400).json({ error: 'rows required' });
+    return;
+  }
+  const settings = await getAppSettings();
+  const icp = icpOverride ?? settings.icpDescription ?? '';
+  if (!icp.trim()) {
+    res.status(400).json({ error: 'ICP not configured. Set ICP description in Settings → ICP.', code: 'ICP_REQUIRED' });
+    return;
+  }
+  const scored = await scoreProspectsAI(rows, icp);
+  res.json({ icp, scores: scored });
+});
+
+app.post('/api/companies/:id/score', requireAuth, async (req, res) => {
+  if (!(await requireFeatureOr402('lead_scoring', res))) return;
+  const { id } = req.params;
+  const { rows: existing } = await pool.query(`${COMPANY_SELECT} WHERE c.id=$1`, [id]);
+  if (!existing[0]) {
+    res.status(404).json({ error: 'Company not found' });
+    return;
+  }
+  const settings = await getAppSettings();
+  const icp = settings.icpDescription ?? '';
+  if (!icp.trim()) {
+    res.status(400).json({ error: 'ICP not configured', code: 'ICP_REQUIRED' });
+    return;
+  }
+  const comp = existing[0];
+  const prospect: ProspectRow = {
+    company: String(comp.company_name),
+    prospectName: '',
+    jobTitle: '',
+    email: '',
+    phone: '',
+    location: String(comp.location ?? ''),
+    employees: comp.employee_count != null ? Number(comp.employee_count) : null,
+    industry: String(comp.industry ?? ''),
+    description: String(comp.description ?? ''),
+    rawInputText: String(comp.raw_input_text ?? ''),
+  };
+  const [scored] = await scoreProspectsAI([prospect], icp);
+  await pool.query(`UPDATE companies SET lead_score=$1, lead_score_reasons=$2::jsonb, lead_scored_at=now() WHERE id=$3`, [
+    scored.score,
+    JSON.stringify(scored.reasons),
+    id,
+  ]);
+  await pool.query(`INSERT INTO lead_scores (company_id, score, reasons, icp_snapshot, model) VALUES ($1,$2,$3::jsonb,$4,$5)`, [
+    id,
+    scored.score,
+    JSON.stringify(scored.reasons),
+    icp,
+    config.ai.provider,
+  ]);
+  const { rows: updated } = await pool.query(`${COMPANY_SELECT} WHERE c.id=$1`, [id]);
+  res.json(mapCompany(updated[0] as Record<string, unknown>));
+});
+
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true });
 });
 
 registerConversationRoutes(app, pool);
 registerActivityRoutes(app);
+
+// Slow scoring of unscored leads — 1 per 8s when Pro/Enterprise and ICP exists
+if (config.nodeEnv !== 'test') {
+  setInterval(async () => {
+    try {
+      const plan = await getCurrentPlan();
+      if (!hasFeature(plan, 'lead_scoring')) return;
+      const settings = await getAppSettings();
+      const icp = settings.icpDescription ?? '';
+      if (!icp.trim()) return;
+      const { rows } = await pool.query(
+        `SELECT c.* FROM companies c WHERE lead_score IS NULL ORDER BY created_at ASC LIMIT 1`
+      );
+      if (!rows[0]) return;
+      const comp = rows[0];
+      const prospect: ProspectRow = {
+        company: String(comp.company_name),
+        prospectName: '',
+        jobTitle: '',
+        email: '',
+        phone: '',
+        location: String(comp.location ?? ''),
+        employees: comp.employee_count != null ? Number(comp.employee_count) : null,
+        industry: String(comp.industry ?? ''),
+        description: String(comp.description ?? ''),
+        rawInputText: String(comp.raw_input_text ?? ''),
+      };
+      const [scored] = await scoreProspectsAI([prospect], icp);
+      await pool.query(`UPDATE companies SET lead_score=$1, lead_score_reasons=$2::jsonb, lead_scored_at=now() WHERE id=$3 AND lead_score IS NULL`, [
+        scored.score,
+        JSON.stringify(scored.reasons),
+        comp.id,
+      ]);
+      await pool.query(`INSERT INTO lead_scores (company_id, score, reasons, icp_snapshot, model) VALUES ($1,$2,$3::jsonb,$4,$5)`, [
+        comp.id,
+        scored.score,
+        JSON.stringify(scored.reasons),
+        icp,
+        config.ai.provider,
+      ]);
+    } catch {}
+  }, 8000);
+}
 
 if (process.env.NODE_ENV === 'production') {
   const distPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist');

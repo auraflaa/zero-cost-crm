@@ -6,6 +6,7 @@ import {
   DEFAULT_CHAMPION_STATUS_TO_STAGE,
   DEFAULT_CONTACT_STATUSES,
   DEFAULT_DISCOVERY_QUESTIONS,
+  DEFAULT_ICP_DESCRIPTION,
   DEFAULT_LOGO_URL,
   DEFAULT_STAGES,
 } from '../defaults';
@@ -19,6 +20,7 @@ const FALLBACK: AppConfig = {
   contactStatuses: [...DEFAULT_CONTACT_STATUSES],
   championStatusToStage: { ...DEFAULT_CHAMPION_STATUS_TO_STAGE },
   discoveryQuestions: [...DEFAULT_DISCOVERY_QUESTIONS],
+  icpDescription: DEFAULT_ICP_DESCRIPTION,
   allowedEmailDomain: null,
   allowedEmailDomains: ['*'],
   allowAnyEmailDomain: true,
@@ -45,6 +47,7 @@ export function useAppConfig() {
         discoveryQuestions: Array.isArray(cfg.discoveryQuestions)
           ? cfg.discoveryQuestions
           : [...DEFAULT_DISCOVERY_QUESTIONS],
+        icpDescription: typeof cfg.icpDescription === 'string' ? cfg.icpDescription : DEFAULT_ICP_DESCRIPTION,
         allowedEmailDomain: cfg.allowedEmailDomain,
         allowedEmailDomains: cfg.allowedEmailDomains ?? ['*'],
         allowAnyEmailDomain: !!cfg.allowAnyEmailDomain,

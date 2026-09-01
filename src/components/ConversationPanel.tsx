@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import type { Conversation, Stage } from '../types';
 import { DEFAULT_STAGES } from '../defaults';
 import type { CrmStore } from '../hooks/useCrmStore';
@@ -8,8 +8,7 @@ import {
   listConversations,
   uploadConversationRecording,
 } from '../lib/conversations';
-import { Field, inputClass, btnGhost, btnPrimary } from './ui';
-import { ConvobrainsBridge } from './ConvobrainsBridge';
+import { Field, inputClass, btnGhost, btnPrimary, Modal } from './ui';
 
 interface ConversationPanelProps {
   store: CrmStore;
@@ -47,6 +46,13 @@ export function ConversationPanel({
   const [loading, setLoading] = useState(true);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [playUrl, setPlayUrl] = useState<string | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordSeconds, setRecordSeconds] = useState(0);
+  const recordTimerRef = useRef<number | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const [transcribingId, setTranscribingId] = useState<string | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const pendingDelete = pendingDeleteId ? items.find((c) => c.id === pendingDeleteId) : null;
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -76,7 +82,29 @@ export function ConversationPanel({
     setUploading(true);
     setError(null);
     try {
-      await uploadConversationRecording(contactId, stageAtCall, file, notes || undefined);
+      const created = await uploadConversationRecording(contactId, stageAtCall, file, notes || undefined);
+      try {
+        const reader = new FileReader();
+        const b64: string = await new Promise((resolve, reject) => {
+          reader.onload = () => {
+            const res = reader.result as string;
+            resolve(res.split(',')[1] ?? '');
+          };
+          reader.onerror = () => reject(new Error('read'));
+          reader.readAsDataURL(file);
+        });
+        if (b64 && (created as unknown as { id?: string })?.id) {
+          const convId = (created as unknown as { id: string }).id ?? (created as unknown as { conversationId?: string })?.conversationId;
+          if (convId) {
+            // fire-and-forget transcribe for phone path — strict prompt, updates score
+            fetch(`/api/conversations/${convId}/transcribe`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('zcrm-token') ?? ''}` },
+              body: JSON.stringify({ audioBase64: b64, mimeType: file.type || 'audio/webm' }),
+            }).catch(() => {});
+          }
+        }
+      } catch {}
       setFile(null);
       setNotes('');
       await refresh();
@@ -84,6 +112,61 @@ export function ConversationPanel({
       setError(e instanceof Error ? e.message : 'Upload failed');
     } finally {
       setUploading(false);
+    }
+  };
+
+  const startRec = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : undefined });
+      const chunks: BlobPart[] = [];
+      mr.ondataavailable = (ev) => {
+        if (ev.data.size > 0) chunks.push(ev.data);
+      };
+      mr.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(chunks, { type: mr.mimeType || 'audio/webm' });
+        const f = new File([blob], `recording-${Date.now()}.webm`, { type: blob.type });
+        setFile(f);
+        setError(null);
+        if (recordTimerRef.current) {
+          window.clearInterval(recordTimerRef.current);
+          recordTimerRef.current = null;
+        }
+        setIsRecording(false);
+      };
+      mediaRecorderRef.current = mr;
+      mr.start();
+      setIsRecording(true);
+      setRecordSeconds(0);
+      recordTimerRef.current = window.setInterval(() => setRecordSeconds((s) => s + 1), 1000);
+    } catch {
+      setError('Microphone not available on this device.');
+    }
+  };
+
+  const stopRec = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') mediaRecorderRef.current.stop();
+  };
+
+  const transcribeNow = async (id: string) => {
+    setTranscribingId(id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/conversations/${id}/transcribe`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('zcrm-token') ?? ''}` },
+        body: JSON.stringify({ audioBase64: '', mimeType: 'audio/webm' }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error((j as { error?: string }).error ?? 'Transcribe failed');
+      }
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Transcription failed');
+    } finally {
+      setTranscribingId(null);
     }
   };
 
@@ -98,7 +181,6 @@ export function ConversationPanel({
   };
 
   const remove = async (id: string) => {
-    if (!confirm('Delete this recording?')) return;
     try {
       await deleteConversation(id);
       if (playingId === id) {
@@ -108,6 +190,8 @@ export function ConversationPanel({
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Delete failed');
+    } finally {
+      setPendingDeleteId(null);
     }
   };
 
@@ -135,13 +219,27 @@ export function ConversationPanel({
             ))}
           </select>
         </Field>
-        <Field label="Audio file (mp3, m4a, wav, webm)">
+        <Field label="Audio file (mp3, m4a, wav, webm) — phone capture">
           <input
             type="file"
             accept="audio/*,.mp3,.m4a,.wav,.webm,.ogg,.aac,.mp4"
+            capture
             className={inputClass}
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           />
+          <div className="mt-2 flex flex-wrap gap-2">
+            {!isRecording ? (
+              <button type="button" className={btnGhost} onClick={() => void startRec()}>
+                Record on phone
+              </button>
+            ) : (
+              <button type="button" className={btnPrimary} onClick={stopRec}>
+                Stop ({recordSeconds}s)
+              </button>
+            )}
+            {file ? <span className="text-xs text-stone-500">{file.name} ({Math.round(file.size / 1024)}KB)</span> : null}
+          </div>
+          <p className="mt-1 text-xs text-stone-500">On phone, choose file or tap Record. Recording is transcribed and analysed to update lead score.</p>
         </Field>
         <Field label="Notes (optional)" className="sm:col-span-2">
           <input
@@ -159,7 +257,7 @@ export function ConversationPanel({
         disabled={uploading || !file}
         onClick={() => void upload()}
       >
-        {uploading ? 'Uploading…' : 'Upload recording'}
+        {uploading ? 'Uploading…' : 'Upload & analyse'}
       </button>
 
       {error ? (
@@ -187,34 +285,81 @@ export function ConversationPanel({
                 key={c.id}
                 className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5"
               >
-                <div className="min-w-0 text-xs">
+                <div className="min-w-0 flex-1 text-xs">
                   <p className="font-medium text-stone-800">{formatCalledAt(c.calledAt)}</p>
                   <p className="text-stone-500">
                     {c.calledByName} · stage: {c.stageAtCall}
                   </p>
                   {c.notes ? <p className="mt-0.5 text-stone-400">{c.notes}</p> : null}
+                  {c.transcript ? (
+                    <p className="mt-1 rounded-none bg-stone-50 px-2 py-1 text-xs text-stone-600">{c.transcript.slice(0, 180)}{c.transcript.length > 180 ? '…' : ''}</p>
+                  ) : null}
+                  {c.analysis?.summary ? (
+                    <p className="mt-1 text-xs text-teal-700">
+                      {c.analysis.tier ? `${c.analysis.tier} ${c.analysis.score ?? ''} · ` : ''}
+                      {c.analysis.summary}
+                    </p>
+                  ) : null}
+                  {c.analysis?.reasons?.length ? (
+                    <p className="mt-0.5 text-[11px] text-stone-400">{(c.analysis.reasons as string[]).join(' · ')}</p>
+                  ) : null}
                 </div>
-                <div className="flex shrink-0 gap-2">
-                  <button type="button" className={btnGhost} onClick={() => void play(c.id)}>
-                    Play
-                  </button>
-                  {store.canDelete ? (
+                <div className="flex shrink-0 flex-col gap-1">
+                  <div className="flex gap-2">
+                    <button type="button" className={btnGhost} onClick={() => void play(c.id)}>
+                      Play
+                    </button>
+                    {store.canDelete ? (
+                      <button
+                        type="button"
+                        className="text-xs text-rose-600 hover:underline"
+                        onClick={() => setPendingDeleteId(c.id)}
+                      >
+                        Delete
+                      </button>
+                    ) : null}
+                  </div>
+                  {!c.transcript ? (
                     <button
                       type="button"
-                      className="text-xs text-rose-600 hover:underline"
-                      onClick={() => void remove(c.id)}
+                      className="text-[11px] font-medium text-teal-700 hover:underline"
+                      onClick={() => void transcribeNow(c.id)}
+                      disabled={transcribingId === c.id}
                     >
-                      Delete
+                      {transcribingId === c.id ? 'Transcribing…' : 'Transcribe'}
                     </button>
                   ) : null}
                 </div>
               </li>
             ))}
+            <Modal
+              open={!!pendingDeleteId}
+              title={pendingDelete ? `Delete recording from ${formatCalledAt(pendingDelete.calledAt)}?` : 'Delete recording?'}
+              onClose={() => setPendingDeleteId(null)}
+            >
+              <p className="text-sm text-stone-600">
+                This will permanently delete the recording
+                {pendingDelete ? (
+                  <span className="font-semibold text-stone-900"> {pendingDelete.calledByName} · {pendingDelete.stageAtCall}</span>
+                ) : null}{' '}
+                and cannot be undone.
+              </p>
+              <div className="mt-6 flex justify-end gap-2">
+                <button type="button" className={btnGhost} onClick={() => setPendingDeleteId(null)}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className={btnPrimary + ' bg-rose-600 hover:bg-rose-700'}
+                  onClick={() => pendingDeleteId && void remove(pendingDeleteId)}
+                >
+                  Delete
+                </button>
+              </div>
+            </Modal>
           </ul>
         )}
       </div>
-
-      <ConvobrainsBridge variant="panel" />
     </div>
   );
 }

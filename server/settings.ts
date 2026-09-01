@@ -10,11 +10,14 @@ import {
   DEFAULT_CHAMPION_STATUS_TO_STAGE,
   DEFAULT_CONTACT_STATUSES,
   DEFAULT_DISCOVERY_QUESTIONS,
+  DEFAULT_ICP_DESCRIPTION,
   DEFAULT_LOGO_URL,
   DEFAULT_STAGES,
   type DiscoveryInputType,
   type DiscoveryQuestion,
 } from '../src/defaults.js';
+
+export type SubscriptionPlan = 'plus' | 'pro' | 'enterprise';
 
 export interface AppSettings {
   brandName: string;
@@ -24,6 +27,8 @@ export interface AppSettings {
   contactStatuses: string[];
   championStatusToStage: Record<string, string | null>;
   discoveryQuestions: DiscoveryQuestion[];
+  icpDescription: string;
+  subscriptionPlan: SubscriptionPlan;
   updatedAt: string | null;
 }
 
@@ -78,6 +83,11 @@ export function asDiscoveryQuestions(value: unknown): DiscoveryQuestion[] {
   return out;
 }
 
+function asSubscriptionPlan(v: unknown): SubscriptionPlan {
+  if (v === 'pro' || v === 'enterprise' || v === 'plus') return v;
+  return 'plus';
+}
+
 function rowToSettings(row: Record<string, unknown>): AppSettings {
   return {
     brandName: String(row.brand_name ?? DEFAULT_BRAND_NAME),
@@ -87,6 +97,8 @@ function rowToSettings(row: Record<string, unknown>): AppSettings {
     contactStatuses: asStringArray(row.contact_statuses, DEFAULT_CONTACT_STATUSES),
     championStatusToStage: asChampionMap(row.champion_status_to_stage),
     discoveryQuestions: asDiscoveryQuestions(row.discovery_questions),
+    icpDescription: String(row.icp_description ?? DEFAULT_ICP_DESCRIPTION),
+    subscriptionPlan: asSubscriptionPlan(row.subscription_plan),
     updatedAt: row.updated_at ? String(row.updated_at) : null,
   };
 }
@@ -100,6 +112,8 @@ function defaultSettingsFromEnv(): AppSettings {
     contactStatuses: [...DEFAULT_CONTACT_STATUSES],
     championStatusToStage: { ...DEFAULT_CHAMPION_STATUS_TO_STAGE },
     discoveryQuestions: [...DEFAULT_DISCOVERY_QUESTIONS],
+    icpDescription: readEnv('ICP_DESCRIPTION') ?? DEFAULT_ICP_DESCRIPTION,
+    subscriptionPlan: (readEnv('SUBSCRIPTION_PLAN') as SubscriptionPlan) ?? 'plus',
     updatedAt: null,
   };
 }
@@ -124,10 +138,10 @@ export async function ensureAppSettings(): Promise<AppSettings> {
     `
     INSERT INTO app_settings (
       id, brand_name, brand_tagline, logo_url,
-      stages, contact_statuses, champion_status_to_stage, discovery_questions
+      stages, contact_statuses, champion_status_to_stage, discovery_questions, icp_description, subscription_plan
     ) VALUES (
       1, $1, $2, $3,
-      $4::jsonb, $5::jsonb, $6::jsonb, $7::jsonb
+      $4::jsonb, $5::jsonb, $6::jsonb, $7::jsonb, $8, $9
     )
     ON CONFLICT (id) DO NOTHING
     `,
@@ -139,6 +153,8 @@ export async function ensureAppSettings(): Promise<AppSettings> {
       JSON.stringify(seed.contactStatuses),
       JSON.stringify(seed.championStatusToStage),
       JSON.stringify(seed.discoveryQuestions),
+      seed.icpDescription,
+      seed.subscriptionPlan,
     ]
   );
 
@@ -162,6 +178,8 @@ export interface SettingsPatch {
   contactStatuses?: string[];
   championStatusToStage?: Record<string, string | null>;
   discoveryQuestions?: DiscoveryQuestion[];
+  icpDescription?: string;
+  subscriptionPlan?: SubscriptionPlan;
 }
 
 function validateNonEmptyStrings(label: string, values: string[]): string | null {
@@ -183,6 +201,8 @@ export async function updateAppSettings(patch: SettingsPatch): Promise<AppSettin
     contactStatuses: patch.contactStatuses ?? current.contactStatuses,
     championStatusToStage: patch.championStatusToStage ?? current.championStatusToStage,
     discoveryQuestions: patch.discoveryQuestions ?? current.discoveryQuestions,
+    icpDescription: patch.icpDescription !== undefined ? patch.icpDescription.trim() : current.icpDescription,
+    subscriptionPlan: patch.subscriptionPlan ?? current.subscriptionPlan,
     updatedAt: current.updatedAt,
   };
 
@@ -208,6 +228,9 @@ export async function updateAppSettings(patch: SettingsPatch): Promise<AppSettin
       contact_statuses = $5::jsonb,
       champion_status_to_stage = $6::jsonb,
       discovery_questions = $7::jsonb,
+      icp_description = $8,
+      subscription_plan = $9,
+      subscription_updated_at = now(),
       updated_at = now()
     WHERE id = 1
     RETURNING *
@@ -220,6 +243,8 @@ export async function updateAppSettings(patch: SettingsPatch): Promise<AppSettin
       JSON.stringify(next.contactStatuses),
       JSON.stringify(next.championStatusToStage),
       JSON.stringify(next.discoveryQuestions),
+      next.icpDescription,
+      next.subscriptionPlan,
     ]
   );
 

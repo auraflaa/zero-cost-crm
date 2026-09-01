@@ -26,6 +26,12 @@ export const NAV_ITEMS: {
     short: 'Settings',
     adminOnly: true,
   },
+  {
+    id: 'subscription',
+    label: 'Subscription',
+    hint: 'Plus · Pro · Enterprise',
+    short: 'Billing',
+  },
 ];
 
 export const PAGE_TITLE: Record<Page, string> = {
@@ -36,6 +42,7 @@ export const PAGE_TITLE: Record<Page, string> = {
   activity: 'SDR Activity',
   users: 'Users',
   settings: 'Settings',
+  subscription: 'Subscription',
 };
 
 export function navItemsForRole(role?: string) {

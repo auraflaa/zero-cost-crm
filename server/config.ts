@@ -68,6 +68,13 @@ export const config = {
     region: read('AWS_REGION'),
     bucket: read('AWS_S3_BUCKET'),
   },
+  ai: {
+    provider: read('AI_PROVIDER') ?? 'mock',
+    apiKey: read('AI_API_KEY'),
+    model: read('AI_MODEL') ?? 'gpt-4o-mini',
+    visionModel: read('AI_VISION_MODEL') ?? 'gpt-4o-mini',
+    whisperModel: read('AI_WHISPER_MODEL') ?? 'whisper-1',
+  },
 } as const;
 
 export function isAllowedEmail(email: string): boolean {

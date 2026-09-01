@@ -10,6 +10,7 @@ import {
   contactFiltersAreActive,
   statusColor,
 } from '../lib/views';
+import { scoreColor, scoreLabel } from '../lib/leadScoring';
 import { logViewEvent } from '../lib/activity';
 import { ContactForm } from './ContactForm';
 import { FilterChip, FilterDropdown, Modal, SearchInput, btnPrimary } from './ui';
@@ -29,11 +30,15 @@ function ContactRow({
   contact,
   companyName,
   stage,
+  leadScore,
+  leadScoring,
   onEdit,
 }: {
   contact: Contact;
   companyName: string;
   stage: string;
+  leadScore: number | null;
+  leadScoring: string;
   onEdit: () => void;
 }) {
   return (
@@ -49,12 +54,18 @@ function ContactRow({
             <p className="truncate text-xs text-stone-400">{contact.email}</p>
           ) : null}
         </div>
-        {contact.champion ? (
-          <span className="shrink-0 rounded-none bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
-            <span aria-hidden="true">★</span>
-            <span className="sr-only">Champion</span>
-          </span>
-        ) : null}
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          {contact.champion ? (
+            <span className="rounded-none bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+              Champion
+            </span>
+          ) : null}
+          {leadScore != null ? (
+            <span className={`rounded-none px-2 py-0.5 text-[10px] font-semibold ${scoreColor(leadScore)}`}>
+              {scoreLabel(leadScore)}
+            </span>
+          ) : null}
+        </div>
       </div>
       <div className="mt-2 flex flex-wrap gap-2 text-xs text-stone-600">
         <span>{companyName}</span>
@@ -67,6 +78,12 @@ function ContactRow({
         >
           {contact.contactStatus}
         </span>
+        {leadScoring ? (
+          <span className="rounded-none bg-stone-100 px-2 py-0.5 text-[11px] text-stone-600" title={leadScoring}>
+            {leadScoring.slice(0, 32)}
+            {leadScoring.length > 32 ? '…' : ''}
+          </span>
+        ) : null}
         {contact.phone ? <span className="text-xs text-stone-500">{contact.phone}</span> : null}
         {contact.nextFollowUp ? (
           <span className="text-xs text-amber-700">Follow-up {contact.nextFollowUp}</span>
@@ -182,6 +199,14 @@ export function Contacts({ store, contactStatuses, stages }: ContactsProps) {
           const as = store.getCompany(a.companyId)?.stage ?? '';
           const bs = store.getCompany(b.companyId)?.stage ?? '';
           cmp = as.localeCompare(bs);
+          break;
+        }
+        case 'leadScore': {
+          const as = store.getCompany(a.companyId)?.leadScore;
+          const bs = store.getCompany(b.companyId)?.leadScore;
+          const aScore = as ?? -1;
+          const bScore = bs ?? -1;
+          cmp = aScore - bScore;
           break;
         }
         case 'nextFollowUp':
@@ -506,12 +531,16 @@ export function Contacts({ store, contactStatuses, stages }: ContactsProps) {
       <div className="space-y-3 md:hidden">
         {sorted.map((t) => {
           const company = store.getCompany(t.companyId);
+          const leadScore = company?.leadScore ?? null;
+          const leadScoring = company?.leadScoreReasons?.join(' · ') ?? company?.leadSource ?? '';
           return (
             <ContactRow
               key={t.id}
               contact={t}
               companyName={company?.companyName ?? '—'}
               stage={company?.stage ?? ''}
+              leadScore={leadScore}
+              leadScoring={leadScoring}
               onEdit={() => openContact(t)}
             />
           );
@@ -525,7 +554,7 @@ export function Contacts({ store, contactStatuses, stages }: ContactsProps) {
 
       <div className="hidden overflow-hidden rounded-none border border-[var(--color-line)] bg-[var(--color-panel)] md:block">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1080px] text-left text-sm">
+          <table className="w-full min-w-[1280px] text-left text-sm">
             <thead>
               <tr className="border-b border-[var(--color-line)] bg-stone-50/80 text-[11px] tracking-wide text-stone-500">
                 <SortHeader
@@ -557,6 +586,14 @@ export function Contacts({ store, contactStatuses, stages }: ContactsProps) {
                   direction={sortDir}
                   onSort={onSort}
                 />
+                <SortHeader
+                  label="Lead score"
+                  sortKey="leadScore"
+                  activeKey={sortKey}
+                  direction={sortDir}
+                  onSort={onSort}
+                />
+                <th className="px-4 py-3 font-semibold uppercase">Lead scoring</th>
                 <th className="px-4 py-3 font-semibold uppercase">Phone</th>
                 <SortHeader
                   label="Follow-up"
@@ -584,6 +621,8 @@ export function Contacts({ store, contactStatuses, stages }: ContactsProps) {
             <tbody>
               {sorted.map((t) => {
                 const company = store.getCompany(t.companyId);
+                const leadScore = company?.leadScore ?? null;
+                const leadScoring = company?.leadScoreReasons?.join(' · ') ?? company?.leadSource ?? '';
                 return (
                   <tr
                     key={t.id}
@@ -595,7 +634,7 @@ export function Contacts({ store, contactStatuses, stages }: ContactsProps) {
                         <span className="font-semibold text-stone-900">{t.contactName}</span>
                         {t.champion ? (
                           <span className="rounded-none bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
-                            ★ Champion
+                            Champion
                           </span>
                         ) : null}
                       </div>
@@ -611,6 +650,22 @@ export function Contacts({ store, contactStatuses, stages }: ContactsProps) {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-stone-600">{company?.stage ?? '—'}</td>
+                    <td className="px-4 py-3">
+                      {leadScore != null ? (
+                        <span className={`rounded-none px-2 py-0.5 text-[11px] font-semibold ${scoreColor(leadScore)}`}>
+                          {scoreLabel(leadScore)}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-stone-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-stone-500" title={leadScoring}>
+                      {leadScoring ? (
+                        <span className="line-clamp-2 max-w-[180px]">{leadScoring}</span>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-stone-600">{t.phone || '—'}</td>
                     <td className="px-4 py-3 text-stone-500">{t.nextFollowUp || '—'}</td>
                     <td className="px-4 py-3 text-stone-500">{formatIsoDate(t.lastContacted)}</td>
@@ -620,7 +675,7 @@ export function Contacts({ store, contactStatuses, stages }: ContactsProps) {
               })}
               {sorted.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-10 text-center text-sm text-stone-400">
+                  <td colSpan={11} className="px-4 py-10 text-center text-sm text-stone-400">
                     No contacts match these filters.
                   </td>
                 </tr>

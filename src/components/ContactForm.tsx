@@ -3,7 +3,7 @@ import type { Contact, Stage } from '../types';
 import { DEFAULT_CONTACT_STATUSES, DEFAULT_STAGES } from '../defaults';
 import type { CrmStore } from '../hooks/useCrmStore';
 import { normalizeOptionalUrl } from '../lib/urls';
-import { Field, inputClass, btnPrimary, btnGhost } from './ui';
+import { Field, inputClass, btnPrimary, btnGhost, Modal } from './ui';
 import { ConversationPanel } from './ConversationPanel';
 
 interface ContactFormProps {
@@ -37,6 +37,8 @@ export function ContactForm({
     notes: initial?.notes ?? '',
   });
   const [stageBusy, setStageBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   const set = (key: string, value: string | boolean) => setForm((f) => ({ ...f, [key]: value }));
 
@@ -255,12 +257,7 @@ export function ContactForm({
           <button
             type="button"
             className="text-sm text-rose-600 hover:underline"
-            onClick={async () => {
-              if (confirm(`Delete ${initial.contactName}?`)) {
-                await store.deleteContact(initial.id);
-                onDone();
-              }
-            }}
+            onClick={() => setConfirmDelete(true)}
           >
             Delete contact
           </button>
@@ -276,6 +273,36 @@ export function ContactForm({
           </button>
         </div>
       </div>
+
+      {initial ? (
+        <Modal open={confirmDelete} title={`Delete ${initial.contactName}?`} onClose={() => setConfirmDelete(false)}>
+          <p className="text-sm text-stone-600">
+            This will permanently delete <span className="font-semibold text-stone-900">{initial.contactName}</span> and unlink it from its company. This action cannot be undone.
+          </p>
+          <div className="mt-6 flex justify-end gap-2">
+            <button type="button" className={btnGhost} onClick={() => setConfirmDelete(false)} disabled={deleteBusy}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className={btnPrimary + ' bg-rose-600 hover:bg-rose-700'}
+              disabled={deleteBusy}
+              onClick={async () => {
+                setDeleteBusy(true);
+                try {
+                  await store.deleteContact(initial.id);
+                  setConfirmDelete(false);
+                  onDone();
+                } finally {
+                  setDeleteBusy(false);
+                }
+              }}
+            >
+              {deleteBusy ? 'Deleting…' : 'Delete'}
+            </button>
+          </div>
+        </Modal>
+      ) : null}
     </form>
   );
 }

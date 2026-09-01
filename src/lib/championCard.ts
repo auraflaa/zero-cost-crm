@@ -50,7 +50,7 @@ export function buildChampionTrail(
   champion: Contact | null
 ): { header: string; note: string | null; followUp: string | null } | null {
   if (!champion) return null;
-  const header = `★ ${champion.contactName} · ${champion.contactStatus}`;
+  const header = `${champion.contactName} · ${champion.contactStatus}`;
   const note = champion.notes
     ? `Note: ${
         champion.notes.length > NOTE_PREVIEW_MAX
