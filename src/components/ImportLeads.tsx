@@ -897,7 +897,7 @@ export function ImportLeads({ store }: ImportLeadsProps) {
               className={`${inputClass} min-h-28 font-mono text-xs`}
               value={voiceTranscript}
               onChange={(e) => setVoiceTranscript(e.target.value)}
-              placeholder="Speak naturally, record a voice note, or paste lead data (e.g. Met with Sarah Connor, VP of Operations at Cyberdyne, email sarah@cyberdyne.example, interested in a demo)&#10;Or paste CSV/TSV data"
+              placeholder="Speak naturally, record a voice note, or paste lead data (e.g. Met with Alex Smith, VP of Operations at Acme Corp, email alex@acme.example, interested in a demo)&#10;Or paste CSV/TSV data"
               rows={4}
             />
             <p className="mt-1 text-xs text-stone-500">Speak naturally, record a voice note, or paste lead data to automatically extract company, prospect, and contact details.</p>
@@ -995,7 +995,7 @@ export function ImportLeads({ store }: ImportLeadsProps) {
               className={`${inputClass} min-h-28 font-mono text-xs`}
               value={imageTextFallback}
               onChange={(e) => setImageTextFallback(e.target.value)}
-              placeholder={`Paste card text or CSV row:\nAcme Bio Labs, Alex Example, Head of Ops, alex@acme.example, 5550101, Austin, 180, Research`}
+              placeholder="Paste card text or CSV row:&#10;Acme Corp, Alex Smith, Head of Operations, alex@acme.example, 555-0101, Austin, 180, SaaS"
               rows={4}
             />
             <p className="mt-1 text-xs text-stone-500">Text from image. Please ensure Company and Prospect Name are included.</p>
@@ -1017,7 +1017,7 @@ export function ImportLeads({ store }: ImportLeadsProps) {
               className={`${inputClass} mt-2 min-h-20 font-mono text-xs`}
               value={imageVoiceTranscript}
               onChange={(e) => setImageVoiceTranscript(e.target.value)}
-              placeholder={`Optional voice transcript to enrich card: "This is Priya from Acme, 120 employees, SaaS in Bengaluru, priya@acme.com"`}
+              placeholder="Optional voice note to enrich card details: &quot;Met Alex from Acme Corp, 120 employees, SaaS, alex@acme.example&quot;"
               rows={3}
             />
             <p className="mt-1 text-xs text-stone-500">When voice is added, both image and transcript are combined.</p>
