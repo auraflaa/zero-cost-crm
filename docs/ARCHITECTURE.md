@@ -30,7 +30,7 @@ In production (`NODE_ENV=production`), Express also serves the built SPA from `d
 | `server/ai/extract.ts`    | Whisper STT audio transcription + multimodal vision card OCR      |
 | `server/ai/scoring.ts`    | AI Lead scoring (0–10 scale) against ICP description             |
 | `server/ai/transcribe.ts` | Call recording STT & ICP conversation analysis                    |
-| `server/subscription.ts`  | Subscription plan tiers (`plus`, `pro`, `enterprise`) & gating    |
+| `server/subscription.ts`  | Subscription plan tiers (`free`, `plus`, `pro`, `enterprise`) & gating    |
 | `server/activity*.ts`     | SDR sessions, events, manager overview                            |
 | `server/conversations.ts` | Recording upload/presign/play                                     |
 | `server/config.ts`        | Environment validation                                            |

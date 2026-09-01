@@ -124,12 +124,12 @@ Deep-link (SPA): `/?page=pipeline&companyId=<uuid>` opens Sales Pipeline with th
 
 | Method  | Path                | Description                                         |
 | ------- | ------------------- | --------------------------------------------------- |
-| `GET`   | `/api/subscription` | Current active tier (`plus`, `pro`, `enterprise`) and features |
+| `GET`   | `/api/subscription` | Current active tier (`free`, `plus`, `pro`, `enterprise`) and features |
 | `PATCH` | `/api/subscription` | Admin: change active subscription plan tier         |
 
-## AI Extraction & Lead Scoring (Pro / Enterprise)
+## AI Extraction & Lead Scoring (Plus / Pro / Enterprise)
 
-These endpoints require a Pro or Enterprise plan (returns `402 Payment Required` on Plus).
+These endpoints require an active AI plan (returns `402 Payment Required` on Free).
 
 | Method  | Path                        | Description                                                                 |
 | ------- | --------------------------- | --------------------------------------------------------------------------- |
