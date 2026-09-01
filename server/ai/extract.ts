@@ -1,33 +1,122 @@
 import { config } from '../config.js';
 import type { ProspectRow } from '../../src/types.js';
-import { parseProspectAuto } from '../../src/lib/importProspects.js';
+import { parseProspectAuto, mapIndustry, cleanEmail, cleanPhone } from '../../src/lib/importProspects.js';
 
-// Lead extraction: TSV/CSV, single row, or free-form spoken English
-const SYSTEM_EXTRACT_JSON = `You are an expert sales lead data extractor. Your job is to extract structured lead records from any spoken notes, meeting transcripts, business card texts, or pasted data.
+/**
+ * Normalizes speech-to-text transcripts by fixing common acoustic/phonetic errors:
+ * - Spoken emails: "alex at acme dot com" -> "alex@acme.com"
+ * - Spoken phone numbers & prefixes: "plus one five five..." -> "+1 555..."
+ * - Number words for headcount: "fifty employees" -> "50 employees"
+ * - Removes speech disfluencies ("um", "uh", "like you know")
+ */
+export function normalizeSttTranscript(raw: string): string {
+  if (!raw) return '';
+  let text = raw;
+
+  // 1. Spoken email conversions
+  // Multi-level TLDs e.g. .co.uk, .co.in, .org.in
+  text = text.replace(/([a-zA-Z0-9._%+-]+)\s+(?:at the rate|at sign|at)\s+([a-zA-Z0-9.-]+)\s+dot\s+([a-zA-Z]{2,})\s+dot\s+([a-zA-Z]{2,})/gi, '$1@$2.$3.$4');
+  text = text.replace(/([a-zA-Z0-9._%+-]+)\s+(?:at the rate|at sign|at)\s+([a-zA-Z0-9.-]+)\s+dot\s+([a-zA-Z]{2,})/gi, '$1@$2.$3');
+  text = text.replace(/([a-zA-Z0-9._%+-]+)\s+dot\s+([a-zA-Z0-9._%+-]+)\s*@/gi, '$1.$2@');
+  text = text.replace(/([a-zA-Z0-9._%+-]+)\s*@\s*([a-zA-Z0-9.-]+)\s*\.\s*([a-zA-Z]{2,})/gi, '$1@$2.$3');
+  text = text.replace(/([a-zA-Z0-9._%+-]+)\s*@\s*([a-zA-Z0-9.-]+)\s+dot\s+([a-zA-Z]{2,})/gi, '$1@$2.$3');
+
+  // 2. Spoken phone numbers & digits
+  const wordToDigit: Record<string, string> = {
+    zero: '0', oh: '0', one: '1', two: '2', three: '3', four: '4', five: '5',
+    six: '6', seven: '7', eight: '8', nine: '9'
+  };
+
+  // Country code speech patterns: "plus one" -> "+1", "plus nine one" -> "+91"
+  text = text.replace(/\bplus\s+one\b/gi, '+1');
+  text = text.replace(/\bplus\s+(?:nine\s+one|91)\b/gi, '+91');
+  text = text.replace(/\bplus\s+(\d+)\b/gi, '+$1');
+
+  // Spoken double and triple digit prefixes: "double five" -> "55", "triple zero" -> "000"
+  text = text.replace(/\bdouble\s+(zero|one|two|three|four|five|six|seven|eight|nine|\d)\b/gi, (_, d) => {
+    const digit = wordToDigit[d.toLowerCase()] || d;
+    return `${digit}${digit}`;
+  });
+  text = text.replace(/\btriple\s+(zero|one|two|three|four|five|six|seven|eight|nine|\d)\b/gi, (_, d) => {
+    const digit = wordToDigit[d.toLowerCase()] || d;
+    return `${digit}${digit}${digit}`;
+  });
+
+  // Convert sequences of 4+ spoken digits into grouped numbers
+  text = text.replace(/\b((?:(?:zero|oh|one|two|three|four|five|six|seven|eight|nine)\s+){3,}(?:zero|oh|one|two|three|four|five|six|seven|eight|nine))\b/gi, (match) => {
+    return match.split(/\s+/).map((w) => wordToDigit[w.toLowerCase()] ?? w).join('');
+  });
+
+  // 3. Spoken employee count words
+  const wordToCount: Record<string, string> = {
+    ten: '10', twenty: '20', thirty: '30', forty: '40', fifty: '50',
+    sixty: '60', seventy: '70', eighty: '80', ninety: '90',
+    'one hundred': '100', 'two hundred': '200', 'three hundred': '300',
+    'five hundred': '500', 'one thousand': '1000', 'two thousand': '2000',
+    'five thousand': '5000', 'ten thousand': '10000',
+  };
+  for (const [w, num] of Object.entries(wordToCount)) {
+    const re = new RegExp(`\\b${w}\\s+(employees|people|staff|headcount|members)\\b`, 'gi');
+    text = text.replace(re, `${num} $1`);
+  }
+
+  // 4. Speech filler disfluencies removal (preserving surrounding sentence context)
+  text = text.replace(/\b(um+|uh+|er+|ah+|you know what i mean|like you know|so basically)\b/gi, ' ');
+  text = text.replace(/\s{2,}/g, ' ').trim();
+
+  return text;
+}
+
+// Lead extraction: TSV/CSV, single row, or free-form spoken English with STT compensation
+const SYSTEM_EXTRACT_JSON = `You are an expert sales lead data extractor and CRM intelligence engine with built-in speech-to-text (STT) error correction and entity classification.
+
+Your job is to parse noisy speech transcripts, voice notes, business card OCR text, or pasted records and return structured, standardized lead records.
+
+### SPEECH-TO-TEXT (STT) & NOISE CORRECTION RULES:
+1. **Phonetic & Spoken Artifacts**:
+   - Correct spoken emails (e.g. "alex at acme dot com", "alex at sign acme dot com", "alex @ acme . com") to valid email syntax ("alex@acme.com").
+   - Correct spoken phone numbers (e.g. "plus one five five five zero one zero zero", "nine eight seven six...") into clean phone numbers ("+1 5550100").
+   - Compensate for homophones, phonetic spelling, and casing errors in company names and prospect names (e.g. "micro soft" -> "Microsoft", "sales force" -> "Salesforce", "acme bio labs" -> "Acme Bio Labs").
+   - Ignore conversational disfluencies and filler words ("met with", "spoke to", "called", "so yeah", "basically").
+
+2. **Entity Classification & Disambiguation**:
+   - **Company**: The actual organization or company name (required). Disambiguate company from person ("Met Alex Smith VP of Sales at Acme Corp" -> company: "Acme Corp", prospectName: "Alex Smith").
+   - **Prospect Name**: Full name or first/last name of the human contact (required). Do NOT include verbs or honorific prefixes.
+   - **Job Title**: Standardize and capitalize executive & functional titles (e.g. "VP of Sales", "CEO & Founder", "Head of Engineering", "Chief Technology Officer (CTO)", "Director of Operations", "Account Executive").
+   - **Industry Classification**: Classify into standard business verticals:
+     - "SaaS" (software, cloud platforms, B2B applications, developer tools)
+     - "Healthcare" (hospitals, clinics, medical devices, pharmaceuticals, biotech)
+     - "BFSI" (banking, fintech, payments, lending, insurance, financial services)
+     - "Retail" (e-commerce, D2C, consumer goods, apparel, retail stores)
+     - "EdTech" (education, universities, e-learning, online tutoring)
+     - "Logistics" (supply chain, trucking, freight, warehousing, shipping)
+     - "Manufacturing" (industrial, hardware, automotive, electronics)
+     - "Cybersecurity" (security software, auth, compliance, SOC)
+     - "Other" (any vertical not matching above)
+   - **Employee Count**: Extract integer headcount (e.g. 50, 200, 1000) if mentioned in words or numbers, else null.
+   - **Description**: 1 concise sentence summarizing the prospect's business context, pain points, requirements, or next steps.
 
 Return a JSON object with a single "leads" array:
 {
   "leads": [
     {
       "company": "Company or Organization name (required)",
-      "prospectName": "Full name or first name of the prospect/contact (required)",
-      "jobTitle": "Job title or role (e.g. VP of Sales, CEO, Head of Ops, Founder, Engineer)",
-      "email": "lowercase email address if mentioned, else empty string",
-      "phone": "phone number if mentioned, else empty string",
-      "location": "city or country if mentioned, else empty string",
-      "employees": null,
-      "industry": "industry (e.g. SaaS, Healthcare, BFSI, Retail, EdTech, Telecom, Logistics, Other)",
-      "description": "1 concise sentence summarizing the prospect context, requirements, or next steps",
+      "prospectName": "Full name of the contact (required)",
+      "jobTitle": "Standardized job title or role",
+      "email": "lowercase email if mentioned, else \"\"",
+      "phone": "phone number if mentioned, else \"\"",
+      "location": "City, State or Country if mentioned, else \"\"",
+      "employees": null or integer number,
+      "industry": "Standard Industry Name",
+      "description": "1 concise sentence summarizing prospect context or requirements",
       "rawInputText": "first 200 chars of source text"
     }
   ]
 }
 
 RULES:
-- Always extract company and prospectName. If only a person and role are mentioned at a company, infer company and name accurately.
-- For conversational notes (e.g. "Met Sarah from Stripe yesterday, she's VP of Engineering, email sarah@stripe.example, interested in a demo"):
-  -> company="Stripe", prospectName="Sarah", jobTitle="VP of Engineering", email="sarah@stripe.example", industry="SaaS", description="VP of Engineering at Stripe interested in demo"
-- For CSV/TSV or delimited rows: extract all columns into the "leads" array.
+- Always extract company and prospectName accurately.
+- For CSV/TSV or multi-line tables: extract each lead into the "leads" array.
 - Return {"leads": []} only if the text contains zero business or contact information.`;
 
 function safeJsonArray(text: string): unknown[] | null {
@@ -115,30 +204,46 @@ function toProspectRows(arr: unknown[], fallbackRaw: string): ProspectRow[] {
       const r = x as Record<string, unknown>;
       let company = String(r.company ?? r.organization ?? r.org ?? '').trim();
       let prospectName = String(r.prospectName ?? r.prospect_name ?? r.name ?? r.contact ?? '').trim();
+      // Clean up common conversational prefixes in prospectName
+      prospectName = prospectName.replace(/^(?:met with|spoke with|spoke to|talking to|call with|lead:?)\s+/i, '').trim();
+      // Clean up common conversational prefixes in company
+      company = company.replace(/^(?:at|from|the|company:?)\s+/i, '').trim();
+
+      // Clean email and phone
+      const rawEmail = String(r.email ?? '').trim();
+      const email = cleanEmail(rawEmail);
+      const rawPhone = String(r.phone ?? '').trim();
+      const phone = cleanPhone(rawPhone);
+
       // If company is missing but email has domain, infer company
-      const email = String(r.email ?? '').trim().toLowerCase();
       if (!company && email && email.includes('@')) {
         const domain = email.split('@')[1]?.split('.')[0];
-        if (domain && !['gmail', 'yahoo', 'hotmail', 'outlook', 'example'].includes(domain)) {
+        if (domain && !['gmail', 'yahoo', 'hotmail', 'outlook', 'example', 'mail'].includes(domain)) {
           company = domain.charAt(0).toUpperCase() + domain.slice(1);
         }
       }
-      // If prospect is missing but jobTitle exists, use job title or "Representative"
+      // If prospect is missing but jobTitle exists, use job title or "Lead Contact"
       if (!prospectName && (r.jobTitle || r.job_title || r.role)) {
         prospectName = String(r.jobTitle ?? r.job_title ?? r.role).trim();
       }
       if (!prospectName && company) {
         prospectName = 'Lead Contact';
       }
+
+      // Standardize industry
+      const rawIndustry = String(r.industry ?? '').trim();
+      const mapped = mapIndustry(rawIndustry);
+      const industry = mapped || rawIndustry;
+
       return {
         company,
         prospectName,
         jobTitle: String(r.jobTitle ?? r.job_title ?? r.title ?? r.role ?? '').trim(),
         email,
-        phone: String(r.phone ?? '').trim(),
+        phone,
         location: String(r.location ?? r.city ?? '').trim(),
         employees: r.employees != null ? Number(String(r.employees).replace(/[^0-9]/g, '')) || null : null,
-        industry: String(r.industry ?? '').trim(),
+        industry,
         description: String(r.description ?? '').trim(),
         rawInputText: String(r.rawInputText ?? r.raw_input_text ?? fallbackRaw).trim().slice(0, 2000),
       };
@@ -155,7 +260,7 @@ export async function extractFromVoice(input: {
   s3Key?: string;
   audioBase64?: string;
 }): Promise<{ rows: ProspectRow[]; errors: string[]; transcript?: string }> {
-  let transcript = (input.transcript ?? '').trimStart().trim();
+  let transcript = normalizeSttTranscript(input.transcript ?? '').trimStart().trim();
 
   // Stage 1: STT when audio provided and provider is real — strip leading whitespace from result
   if (!transcript && config.ai.provider !== 'mock' && config.ai.apiKey && input.audioBase64) {
@@ -175,7 +280,7 @@ export async function extractFromVoice(input: {
       });
       if (res.ok) {
         const j = (await res.json()) as { text?: string };
-        transcript = (j.text ?? '').trimStart().trim();
+        transcript = normalizeSttTranscript(j.text ?? '').trimStart().trim();
       } else {
         const errText = await res.text().catch(() => '');
         if (errText) console.warn('STT error', res.status, errText.slice(0, 300));
@@ -337,8 +442,8 @@ export async function extractFromImage(input: {
   const hasImage = !!input.imageBase64;
   const hasVoice = !!input.transcript?.trimStart().trim();
   const hasFallback = !!input.fallbackText?.trimStart().trim();
-  // Normalize inputs by stripping leading whitespace
-  if (hasVoice) input.transcript = input.transcript!.trimStart().trim();
+  // Normalize inputs by stripping leading whitespace & fixing STT artifacts
+  if (hasVoice) input.transcript = normalizeSttTranscript(input.transcript!).trimStart().trim();
   if (hasFallback) input.fallbackText = input.fallbackText!.trimStart().trim();
 
   if (config.ai.provider === 'mock' && !config.ai.apiKey) {

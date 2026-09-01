@@ -1,4 +1,5 @@
 import { config } from '../config.js';
+import { normalizeSttTranscript } from './extract.js';
 
 /**
  * STT via Groq whisper-large-v3-turbo (or OpenAI) — reuses AI_API_KEY with strict handling.
@@ -25,7 +26,7 @@ export async function transcribeAudioBase64(
     });
     if (!res.ok) return '';
     const j = (await res.json()) as { text?: string };
-    return (j.text ?? '').trim();
+    return normalizeSttTranscript(j.text ?? '').trim();
   } catch {
     return '';
   }
@@ -33,15 +34,16 @@ export async function transcribeAudioBase64(
 
 /**
  * Analyse transcript against ICP + company/contact context, return score delta and summary.
- * Reuses strict JSON prompt like leadScoring but for call analysis.
+ * Reuses strict JSON prompt like leadScoring but for call analysis with STT error compensation.
  */
 export async function analyseTranscriptForLead(
   transcript: string,
   icpDescription: string,
   context: { companyName?: string; contactName?: string; industry?: string; stage?: string }
 ): Promise<{ score: number; reasons: string[]; tier: string; summary: string }> {
-  if (!transcript.trim()) return { score: 5, reasons: ['Empty transcript'], tier: 'Warm', summary: '' };
-  if (!icpDescription.trim()) return { score: 5, reasons: ['No ICP configured'], tier: 'Warm', summary: transcript.slice(0, 200) };
+  const normalized = normalizeSttTranscript(transcript).trim();
+  if (!normalized) return { score: 5, reasons: ['Empty transcript'], tier: 'Warm', summary: '' };
+  if (!icpDescription.trim()) return { score: 5, reasons: ['No ICP configured'], tier: 'Warm', summary: normalized.slice(0, 200) };
   if (config.ai.provider === 'mock' || !config.ai.apiKey) {
     // Local heuristic: reuse simple keyword scoring + summary truncation
     const { scoreProspect } = await import('../../src/lib/leadScoring.js');
@@ -54,18 +56,24 @@ export async function analyseTranscriptForLead(
       location: '',
       employees: null,
       industry: context.industry ?? '',
-      description: transcript.slice(0, 500),
-      rawInputText: transcript.slice(0, 2000),
+      description: normalized.slice(0, 500),
+      rawInputText: normalized.slice(0, 2000),
     };
     const s = scoreProspect(row as never, icpDescription);
-    return { ...s, summary: transcript.slice(0, 280) };
+    return { ...s, summary: normalized.slice(0, 280) };
   }
   try {
     const baseUrl = config.ai.provider === 'groq' ? 'https://api.groq.com/openai/v1' : 'https://api.openai.com/v1';
-    const system = `You are a precise sales call analyser. Input is an ICP description, call context, and transcript. Output ONLY JSON object, no markdown.
-Required keys: score (0-10 integer), reasons (array 1-3 short strings), tier ("Hot"|"Warm"|"Cold"), summary (1-2 sentences, max 320 chars).
-Rules: score 8-10 Hot, 5-7 Warm, 0-4 Cold. Base on ICP match, call outcome, budget/timeline/needs. Be concise. Example: {"score":8,"reasons":["SaaS matches ICP","mentioned 100k budget"],"tier":"Hot","summary":"CEO confirmed budget and next demo."}`;
-    const user = `ICP: """${icpDescription.trim()}"""\nContext: ${JSON.stringify(context)}\nTranscript (may have leading spaces, already stripped): """${transcript.trimStart().trim().slice(0, 6000)}"""`;
+    const system = `You are a precise sales call conversation analyser with built-in tolerance for speech-to-text (STT) transcription noise and conversational disfluencies.
+Input: ICP description, CRM context, and call transcript. Output ONLY a valid JSON object.
+Required keys:
+- "score": integer 0-10 (8-10 Hot, 5-7 Warm, 0-4 Cold)
+- "reasons": string[] (1-3 concise bullet points)
+- "tier": "Hot" | "Warm" | "Cold"
+- "summary": 1-2 sentences summarizing key takeaway, objections, budget, or next steps (max 320 chars)
+
+Rules: Base score on ICP alignment, prospect intent, budget, authority, and concrete next steps. Do not penalize for conversational repetition or phonetic transcription noise.`;
+    const user = `ICP: """${icpDescription.trim()}"""\nContext: ${JSON.stringify(context)}\nTranscript: """${normalized.slice(0, 6000)}"""`;
     const res = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.ai.apiKey}` },

@@ -15,14 +15,14 @@ export function cleanPhone(raw: string): string {
 
 export function mapIndustry(raw: string): Industry | '' {
   const s = raw.toLowerCase().replace(/[^a-z0-9\s&]/g, ' ');
-  if (/hospital|health|care|medical|pharma/.test(s)) return 'Healthcare';
-  if (/biotech|research|genome|lab/.test(s)) return 'Research / Biotech';
-  if (/retail|cosmetic|wholesale|shop/.test(s)) return 'Retail';
-  if (/bank|fintech|insurance|bfsi/.test(s)) return 'BFSI';
-  if (/saas|software|tech/.test(s)) return 'SaaS';
-  if (/edu|edtech/.test(s)) return 'EdTech';
-  if (/telecom/.test(s)) return 'Telecom';
-  if (/logistics|fleet|shipping/.test(s)) return 'Logistics';
+  if (/hospital|health|care|medical|pharma|clinic|doctor|patient/.test(s)) return 'Healthcare';
+  if (/biotech|research|genome|lab|diagnostics|genomics|life science/.test(s)) return 'Research / Biotech';
+  if (/retail|ecommerce|e commerce|d2c|apparel|fashion|cosmetic|wholesale|shop|store|merchant|goods/.test(s)) return 'Retail';
+  if (/bank|fintech|insurance|bfsi|payment|lending|wealth|broker|crypto|capital/.test(s)) return 'BFSI';
+  if (/saas|software|tech|cloud|platform|app|developer|cyber|ai|devops/.test(s)) return 'SaaS';
+  if (/edu|edtech|university|school|college|academic|tutoring|course|learning/.test(s)) return 'EdTech';
+  if (/telecom|mobile network|cellular|broadband/.test(s)) return 'Telecom';
+  if (/logistics|fleet|shipping|freight|transport|cargo|trucking|supply chain|warehouse/.test(s)) return 'Logistics';
   if (!raw.trim()) return '';
   return 'Other';
 }

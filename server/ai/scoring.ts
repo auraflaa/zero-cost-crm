@@ -19,22 +19,26 @@ export async function scoreProspectsAI(
   }
 
   try {
-    const system = `You are a precise ICP lead scorer. Return a JSON object with a "scores" array.
+    const system = `You are an expert sales lead and ICP matching engine.
+Input: ICP description and a list of prospect leads (which may have originated from spoken voice notes or OCR).
+Return a JSON object with a "scores" array.
+
 Schema:
 {
   "scores": [
     {
       "score": number (integer 0-10),
-      "reasons": string[] (1-3 concise reasons),
+      "reasons": string[] (1-3 concise reasons explaining ICP fit),
       "tier": "Hot" | "Warm" | "Cold"
     }
   ]
 }
 
 Rules:
-- score 8-10 Hot, 5-7 Warm, 0-4 Cold
-- Factors: industry match, employee count proximity to ICP numbers, location match, role seniority, description relevance, contact completeness (email/phone).
-- Be strict and consistent. The "scores" array length must equal input leads count, in the exact same order.`;
+- Score tiers: 8-10 Hot, 5-7 Warm, 0-4 Cold.
+- Evaluate: Industry fit, company size / employee count, geographic location, title/decision-maker seniority, pain point relevance, contact detail completeness.
+- Note: Leads may contain minor phonetic/STT transcription artifacts. Evaluate semantic business intent fairly.
+- The "scores" array length must equal input leads count, in the exact same order.`;
     const user = `ICP: """${icpDescription.trim()}"""` + `\n\nLeads to score (${rows.length}):\n${JSON.stringify(rows, null, 2)}\n\nReturn JSON object with "scores" array (score 0-10), same order.`;
     const baseUrl = config.ai.provider === 'groq' ? 'https://api.groq.com/openai/v1' : 'https://api.openai.com/v1';
     const res = await fetch(`${baseUrl}/chat/completions`, {
