@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import type { Contact, Stage } from '../types';
 import { DEFAULT_CONTACT_STATUSES, DEFAULT_STAGES } from '../defaults';
 import type { CrmStore } from '../hooks/useCrmStore';
@@ -52,7 +52,18 @@ export function ContactForm({
     ? store.companies.find((c) => c.id === form.companyId)
     : undefined;
 
+  const [companyStage, setCompanyStage] = useState<string>(
+    linkedCompany?.stage ?? stages[0] ?? ''
+  );
+
+  useEffect(() => {
+    if (linkedCompany?.stage) {
+      setCompanyStage(linkedCompany.stage);
+    }
+  }, [linkedCompany?.stage]);
+
   const onCompanyStageChange = async (stage: string) => {
+    setCompanyStage(stage);
     if (!form.companyId || !linkedCompany || stage === linkedCompany.stage) return;
     setStageBusy(true);
     setError(null);
@@ -97,6 +108,13 @@ export function ContactForm({
       } else {
         await store.addContact(payload);
       }
+
+      if (form.companyId && linkedCompany && companyStage && companyStage !== linkedCompany.stage) {
+        await store.moveCompanyStage(form.companyId, companyStage as Stage, {
+          stageChangeSource: 'contact_form',
+        });
+      }
+
       onDone();
     } catch (err) {
       console.error('Contact save failed:', err);

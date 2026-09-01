@@ -64,16 +64,30 @@ export async function analyseTranscriptForLead(
   }
   try {
     const baseUrl = config.ai.provider === 'groq' ? 'https://api.groq.com/openai/v1' : 'https://api.openai.com/v1';
-    const system = `You are a precise sales call conversation analyser with built-in tolerance for speech-to-text (STT) transcription noise and conversational disfluencies.
-Input: ICP description, CRM context, and call transcript. Output ONLY a valid JSON object.
-Required keys:
-- "score": integer 0-10 (8-10 Hot, 5-7 Warm, 0-4 Cold)
-- "reasons": string[] (1-3 concise bullet points)
-- "tier": "Hot" | "Warm" | "Cold"
-- "summary": 1-2 sentences summarizing key takeaway, objections, budget, or next steps (max 320 chars)
+    const system = `You are a master Sales Conversation Intelligence & Opportunity Qualification AI.
 
-Rules: Base score on ICP alignment, prospect intent, budget, authority, and concrete next steps. Do not penalize for conversational repetition or phonetic transcription noise.`;
-    const user = `ICP: """${icpDescription.trim()}"""\nContext: ${JSON.stringify(context)}\nTranscript: """${normalized.slice(0, 6000)}"""`;
+Your objective: Analyze sales call audio transcripts, speech notes, and customer dialog to evaluate ICP fit, deal momentum, buying intent, and next action items.
+
+### EVALUATION CRITERIA:
+1. **ICP & Problem-Solution Fit**: How well does the customer's problem align with the ICP target profile and offering?
+2. **BANT / MEDDIC Qualification**:
+   - Budget: Budget allocated or willing to invest?
+   - Authority: Is this contact the decision maker or champion?
+   - Need: Explicit pain points or urgent requirements?
+   - Timeline: Imminent rollout or vague future interest?
+3. **Speech-to-Text (STT) Tolerance**:
+   - Spoken transcripts may contain phonetic inaccuracies, stuttering, or transcription artifacts. Focus on the underlying business semantics and customer intent.
+
+### OUTPUT SCHEMA (Strict JSON):
+{
+  "score": integer 0-10, // 8-10 Hot, 5-7 Warm, 0-4 Cold
+  "tier": "Hot" | "Warm" | "Cold",
+  "reasons": [
+    "1-2 concise bullet points explaining specific signals from the call"
+  ],
+  "summary": "2-3 concise sentences summarizing key discussion points, customer objections, and agreed next steps (max 320 chars)"
+}`;
+    const user = `Target ICP Profile: """${icpDescription.trim()}"""\nAccount Context: ${JSON.stringify(context)}\nCall Audio Transcript: """${normalized.slice(0, 7000)}"""\n\nAnalyze and return JSON object.`;
     const res = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.ai.apiKey}` },
@@ -94,13 +108,13 @@ Rules: Base score on ICP alignment, prospect intent, budget, authority, and conc
       const cand = m ? m[0] : raw;
       try {
         const v = JSON.parse(cand) as { score?: number; reasons?: string[]; tier?: string; summary?: string };
-        if (typeof v.score === 'number') {
-          let s = Number(v.score);
+        if (typeof v.score === 'number' || typeof (v as Record<string, unknown>).leadScore === 'number') {
+          let s = Number(v.score ?? (v as Record<string, unknown>).leadScore);
           if (s > 10) s = Math.round(s / 10);
           const score = Math.max(0, Math.min(10, Math.round(s)));
           return {
             score,
-            reasons: Array.isArray(v.reasons) ? v.reasons.slice(0, 5).map(String) : ['Analysis complete'],
+            reasons: Array.isArray(v.reasons) ? v.reasons.slice(0, 4).map(String) : ['Call conversation analysis complete'],
             tier: v.tier === 'Hot' || v.tier === 'Warm' || v.tier === 'Cold' ? v.tier : score >= 8 ? 'Hot' : score >= 5 ? 'Warm' : 'Cold',
             summary: String(v.summary ?? '').trim().slice(0, 320) || transcript.slice(0, 200).trim(),
           };

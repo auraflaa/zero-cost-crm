@@ -68,56 +68,60 @@ export function normalizeSttTranscript(raw: string): string {
 }
 
 // Lead extraction: TSV/CSV, single row, or free-form spoken English with STT compensation
-const SYSTEM_EXTRACT_JSON = `You are an expert sales lead data extractor and CRM intelligence engine with built-in speech-to-text (STT) error correction and entity classification.
+const SYSTEM_EXTRACT_JSON = `You are an elite, highly intelligent CRM Lead Extraction Engine with built-in Speech-to-Text (STT) noise compensation, Optical Character Recognition (OCR) correction, and entity resolution.
 
-Your job is to parse noisy speech transcripts, voice notes, business card OCR text, or pasted records and return structured, standardized lead records.
+Your objective: Thoroughly analyze noisy transcripts, voice memos, business card OCR, meeting debriefs, or pasted unstructured text and extract ALL unique sales leads into a structured JSON object.
 
-### SPEECH-TO-TEXT (STT) & NOISE CORRECTION RULES:
-1. **Phonetic & Spoken Artifacts**:
-   - Correct spoken emails (e.g. "alex at acme dot com", "alex at sign acme dot com", "alex @ acme . com") to valid email syntax ("alex@acme.com").
-   - Correct spoken phone numbers (e.g. "plus one five five five zero one zero zero", "nine eight seven six...") into clean phone numbers ("+1 5550100").
-   - Compensate for homophones, phonetic spelling, and casing errors in company names and prospect names (e.g. "micro soft" -> "Microsoft", "sales force" -> "Salesforce", "acme bio labs" -> "Acme Bio Labs").
-   - Ignore conversational disfluencies and filler words ("met with", "spoke to", "called", "so yeah", "basically").
+### EXTRACTION & NORMALIZATION GUIDELINES:
 
-2. **Entity Classification & Disambiguation**:
-   - **Company**: The actual organization or company name (required). Disambiguate company from person ("Met Alex Smith VP of Sales at Acme Corp" -> company: "Acme Corp", prospectName: "Alex Smith").
-   - **Prospect Name**: Full name or first/last name of the human contact (required). Do NOT include verbs or honorific prefixes.
-   - **Job Title**: Standardize and capitalize executive & functional titles (e.g. "VP of Sales", "CEO & Founder", "Head of Engineering", "Chief Technology Officer (CTO)", "Director of Operations", "Account Executive").
-   - **Industry Classification**: Classify into standard business verticals:
-     - "SaaS" (software, cloud platforms, B2B applications, developer tools)
-     - "Healthcare" (hospitals, clinics, medical devices, pharmaceuticals, biotech)
-     - "BFSI" (banking, fintech, payments, lending, insurance, financial services)
-     - "Retail" (e-commerce, D2C, consumer goods, apparel, retail stores)
-     - "EdTech" (education, universities, e-learning, online tutoring)
-     - "Logistics" (supply chain, trucking, freight, warehousing, shipping)
-     - "Manufacturing" (industrial, hardware, automotive, electronics)
-     - "Cybersecurity" (security software, auth, compliance, SOC)
-     - "Other" (any vertical not matching above)
-   - **Employee Count**: Extract integer headcount (e.g. 50, 200, 1000) if mentioned in words or numbers, else null.
-   - **Description**: 1 concise sentence summarizing the prospect's business context, pain points, requirements, or next steps.
+1. **Entity Extraction & Disambiguation**:
+   - **company** (string, required): The target organization/company name. If not explicitly named but a business email domain is present (e.g. "sarah@apexhealth.io"), deduce the company name ("Apex Health"). Remove legal suffixes if noisy ("Inc.", "LLC", "Ltd") unless essential.
+   - **prospectName** (string, required): The full name of the human contact person. Strip conversational verbs and honorifics ("Met with Dr. Sarah Connor" -> "Sarah Connor"). If no individual person is named, use "Primary Contact" or the role.
+   - **jobTitle** (string): Standardized, capitalized professional title (e.g. "VP of Sales", "CTO", "Head of Growth", "Director of Product", "Account Executive", "Founder & CEO").
+   - **email** (string): Clean, lowercase email address. Convert spoken forms ("alex at stripe dot com" -> "alex@stripe.com"). If unknown, return "".
+   - **phone** (string): Standardized international or national phone number with digits and leading '+' if given. Convert spoken digits. If unknown, return "".
+   - **location** (string): City, State, or Country (e.g. "San Francisco, CA", "London, UK", "Bengaluru"). If unknown, return "".
+   - **employees** (integer or null): Approximate headcount if mentioned in words or numbers (e.g. "fifty staff" -> 50, "150 employees" -> 150). Otherwise null.
+   - **industry** (string): Standard industry taxonomy:
+     - "SaaS" (software, cloud platforms, B2B applications, API tools, developer platforms)
+     - "Healthcare" (digital health, biotech, medical devices, hospitals, clinical)
+     - "BFSI" (banking, fintech, payments, lending, insurance, capital markets)
+     - "Retail" (e-commerce, D2C brands, consumer goods, apparel, retail logistics)
+     - "EdTech" (education, learning platforms, universities, training)
+     - "Logistics" (supply chain, trucking, freight, warehousing, fleet management)
+     - "Manufacturing" (industrial equipment, hardware, automotive, electronics)
+     - "Cybersecurity" (security software, compliance, identity, SOC)
+     - "Other" (any other industry)
+   - **description** (string): 1-2 concise, high-value sentences capturing the prospect's core business, immediate pain points, requirements, conversation context, and next step.
 
-Return a JSON object with a single "leads" array:
+2. **Multi-Lead Extraction**:
+   - If the input contains multiple contacts, business cards, or companies, extract EACH one as an independent object in the "leads" array. Never omit valid contacts.
+
+3. **Speech-to-Text (STT) & Phonetic Noise Compensation**:
+   - Spoken emails: "john dot doe at gmail dot com" -> "john.doe@gmail.com".
+   - Spoken numbers: "plus nine one nine eight seven six..." -> "+91 9876...".
+   - Phonetic company spellings: "micro soft" -> "Microsoft", "sales force" -> "Salesforce", "open ai" -> "OpenAI".
+   - Filter out filler words: "um", "uh", "like", "you know", "basically", "so yeah".
+
+### OUTPUT SCHEMA (Strict JSON):
 {
   "leads": [
     {
-      "company": "Company or Organization name (required)",
-      "prospectName": "Full name of the contact (required)",
-      "jobTitle": "Standardized job title or role",
-      "email": "lowercase email if mentioned, else \"\"",
-      "phone": "phone number if mentioned, else \"\"",
-      "location": "City, State or Country if mentioned, else \"\"",
-      "employees": null or integer number,
-      "industry": "Standard Industry Name",
-      "description": "1 concise sentence summarizing prospect context or requirements",
-      "rawInputText": "first 200 chars of source text"
+      "company": "Company Name",
+      "prospectName": "Full Name",
+      "jobTitle": "Job Title / Role",
+      "email": "email@domain.com",
+      "phone": "+1234567890",
+      "location": "City, Country",
+      "employees": 100,
+      "industry": "SaaS",
+      "description": "Expressed strong interest in CRM automation; looking to replace legacy tool next quarter.",
+      "rawInputText": "Source excerpt"
     }
   ]
 }
 
-RULES:
-- Always extract company and prospectName accurately.
-- For CSV/TSV or multi-line tables: extract each lead into the "leads" array.
-- Return {"leads": []} only if the text contains zero business or contact information.`;
+If no leads or business information can be extracted, return {"leads": []}.`;
 
 function safeJsonArray(text: string): unknown[] | null {
   const t = text.trim();

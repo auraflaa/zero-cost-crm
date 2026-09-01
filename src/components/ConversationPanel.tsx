@@ -56,6 +56,8 @@ export function ConversationPanel({
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const pendingDelete = pendingDeleteId ? items.find((c) => c.id === pendingDeleteId) : null;
 
+  const [stageSavedToast, setStageSavedToast] = useState(false);
+
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
@@ -76,6 +78,19 @@ export function ConversationPanel({
     if (company?.stage) setStageAtCall(company.stage);
   }, [company?.stage]);
 
+  const handleStageChange = async (newStage: Stage) => {
+    setStageAtCall(newStage);
+    if (companyId && company && company.stage !== newStage) {
+      try {
+        await store.moveCompanyStage(companyId, newStage, { stageChangeSource: 'contact_form' });
+        setStageSavedToast(true);
+        setTimeout(() => setStageSavedToast(false), 2500);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to update company stage');
+      }
+    }
+  };
+
   const upload = async () => {
     if (!file) {
       setError('Choose an audio file first');
@@ -84,6 +99,11 @@ export function ConversationPanel({
     setUploading(true);
     setError(null);
     try {
+      if (companyId && stageAtCall && company?.stage !== stageAtCall) {
+        try {
+          await store.moveCompanyStage(companyId, stageAtCall, { stageChangeSource: 'contact_form' });
+        } catch {}
+      }
       const created = await uploadConversationRecording(contactId, stageAtCall, file, notes || undefined);
       try {
         const reader = new FileReader();
@@ -209,17 +229,24 @@ export function ConversationPanel({
 
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Stage at call">
-          <select
-            className={inputClass}
-            value={stageAtCall}
-            onChange={(e) => setStageAtCall(e.target.value as Stage)}
-          >
-            {stages.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
+          <div className="space-y-1">
+            <select
+              className={inputClass}
+              value={stageAtCall}
+              onChange={(e) => void handleStageChange(e.target.value as Stage)}
+            >
+              {stages.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+            {stageSavedToast ? (
+              <p className="text-[11px] font-semibold text-emerald-700">✓ Company stage updated to {stageAtCall}</p>
+            ) : (
+              <p className="text-[11px] text-stone-500">Syncs directly with linked company pipeline stage.</p>
+            )}
+          </div>
         </Field>
         <Field label="Audio file (mp3, m4a, wav, webm) — phone capture">
           <input
