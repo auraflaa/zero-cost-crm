@@ -266,7 +266,7 @@ export function SubscriptionPage() {
               }}
               className="inline-flex items-center gap-1.5 rounded-none border border-[var(--color-line)] bg-white px-3 py-1.5 text-xs font-medium text-stone-700 shadow-sm hover:bg-stone-50 hover:text-stone-900"
             >
-              <span>💳</span> Manage Payment Method (Demo)
+              Manage Payment Method (Demo)
             </button>
             <button
               type="button"
@@ -277,7 +277,7 @@ export function SubscriptionPage() {
               }}
               className="inline-flex items-center gap-1.5 rounded-none border border-teal-300 bg-teal-50/80 px-3 py-1.5 text-xs font-semibold text-teal-800 hover:bg-teal-100"
             >
-              <span>📞</span> Book Discovery Call
+              Book Discovery Call
             </button>
           </div>
         )}
@@ -582,7 +582,7 @@ export function SubscriptionPage() {
                     }}
                     className={btnGhost + ' text-xs'}
                   >
-                    💳 Manage Billing & Invoices
+                    Manage Billing & Invoices
                   </button>
                   <button
                     type="button"
@@ -807,7 +807,7 @@ export function SubscriptionPage() {
         ) : (
           <form onSubmit={submitSimulatedPayment} className="space-y-4">
             <div className="rounded-none border border-sky-300 bg-sky-50/80 p-3 text-xs text-sky-950">
-              <span className="font-bold">🧪 Zero Payment Demo Mode:</span> This checkout simulates subscription activation. <strong className="text-sky-900">No real payments or credit card charges will be made.</strong>
+              <span className="font-bold">Zero Payment Demo Mode:</span> This checkout simulates subscription activation. <strong className="text-sky-900">No real payments or credit card charges will be made.</strong>
             </div>
 
             {paymentError ? (
@@ -953,7 +953,7 @@ export function SubscriptionPage() {
             </div>
 
             <div className="flex items-center justify-between pt-3 border-t border-[var(--color-line)]">
-              <span className="text-[11px] text-stone-400">🔒 256-bit encrypted simulation</span>
+              <span className="text-[11px] text-stone-400">256-bit encrypted simulation</span>
               <div className="flex gap-2">
                 <button
                   type="button"

@@ -977,7 +977,7 @@ export function ImportLeads({ store }: ImportLeadsProps) {
               className={`${btnPrimary} ${isRecording ? 'bg-rose-600 hover:bg-rose-700' : ''}`}
               disabled={voiceBusy || !sub.hasVoice}
             >
-              {isRecording ? `⏹ Stop Recording (${recordSeconds}s)` : '🎙 Record Voice Note'}
+              {isRecording ? `Stop Recording (${recordSeconds}s)` : 'Record Voice Note'}
             </button>
             <label className={`${btnGhost} cursor-pointer`}>
               Upload Audio File
@@ -1088,7 +1088,7 @@ export function ImportLeads({ store }: ImportLeadsProps) {
 
           <div className="flex flex-wrap items-center gap-2">
             <label className={`${btnPrimary} cursor-pointer`}>
-              📸 Take Photo / Upload Card
+              Take Photo / Upload Card
               <input
                 type="file"
                 accept="image/*"
@@ -1099,7 +1099,7 @@ export function ImportLeads({ store }: ImportLeadsProps) {
               />
             </label>
             <label className={`${btnGhost} cursor-pointer`}>
-              🎙 Attach Voice Notes for Card
+              Attach Voice Notes for Card
               <input
                 type="file"
                 accept="audio/*,.webm,.wav,.mp3,.m4a"
