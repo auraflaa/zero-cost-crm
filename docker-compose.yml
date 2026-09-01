@@ -19,6 +19,9 @@ services:
       - '4000:4000'
     extra_hosts:
       - 'host.docker.internal:host-gateway'
+    networks:
+      - default
+      - functional_default
     environment:
       NODE_ENV: production
       PORT: 4000
@@ -34,3 +37,9 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+
+networks:
+  default:
+  functional_default:
+    name: functional_default
+    external: true
