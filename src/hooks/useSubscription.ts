@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../lib/api';
 
-export type Plan = 'plus' | 'pro' | 'enterprise';
+export type Plan = 'free' | 'plus' | 'pro' | 'enterprise';
 
 export function useSubscription() {
-  const [plan, setPlan] = useState<Plan>('plus');
+  const [plan, setPlan] = useState<Plan>('pro');
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
@@ -26,9 +26,9 @@ export function useSubscription() {
     void refresh();
   }, [refresh]);
 
-  const hasVoice = plan === 'pro' || plan === 'enterprise';
-  const hasImage = plan === 'pro' || plan === 'enterprise';
-  const hasScoring = plan === 'pro' || plan === 'enterprise';
+  const hasVoice = plan !== 'free';
+  const hasImage = plan !== 'free';
+  const hasScoring = plan !== 'free';
   const hasCallAnalysis = plan === 'pro' || plan === 'enterprise';
 
   return { plan, loading, refresh, hasVoice, hasImage, hasScoring, hasCallAnalysis };

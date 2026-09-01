@@ -624,12 +624,12 @@ export function ImportLeads({ store }: ImportLeadsProps) {
             <span>{m === 'single' ? 'Single lead' : m === 'bulk' ? 'Bulk import' : m === 'voice' ? 'Voice' : 'Image / Card'}</span>
             {m === 'voice' && !sub.hasVoice ? (
               <span className="rounded bg-amber-100 px-1 py-0.2 text-[10px] font-bold text-amber-800">
-                PRO
+                PLUS
               </span>
             ) : null}
             {m === 'image' && !sub.hasImage ? (
               <span className="rounded bg-amber-100 px-1 py-0.2 text-[10px] font-bold text-amber-800">
-                PRO
+                PLUS
               </span>
             ) : null}
           </button>
@@ -855,9 +855,9 @@ export function ImportLeads({ store }: ImportLeadsProps) {
             <div className="rounded-none border border-amber-300 bg-amber-50 p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <p className="text-xs font-semibold text-amber-950 uppercase tracking-wider">Voice AI · Pro Feature</p>
+                  <p className="text-xs font-semibold text-amber-950 uppercase tracking-wider">Voice AI · Plus & Pro Feature</p>
                   <p className="mt-0.5 text-xs text-amber-800">
-                    Audio recording, auto-transcription via Whisper, and voice lead extraction are available on Pro and Enterprise tiers.
+                    Audio recording, auto-transcription via Whisper, and voice lead extraction are available on Plus, Pro, and Enterprise tiers.
                   </p>
                 </div>
                 <a
@@ -948,9 +948,9 @@ export function ImportLeads({ store }: ImportLeadsProps) {
             <div className="rounded-none border border-amber-300 bg-amber-50 p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <p className="text-xs font-semibold text-amber-950 uppercase tracking-wider">Image AI · Pro Feature</p>
+                  <p className="text-xs font-semibold text-amber-950 uppercase tracking-wider">Image AI · Plus & Pro Feature</p>
                   <p className="mt-0.5 text-xs text-amber-800">
-                    Business card OCR with Vision AI and combined voice + image lead parsing are available on Pro and Enterprise tiers.
+                    Business card OCR with Vision AI and combined voice + image lead parsing are available on Plus, Pro, and Enterprise tiers.
                   </p>
                 </div>
                 <a
