@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { btnPrimary, btnGhost } from './ui';
+import { btnPrimary, btnGhost, Modal } from './ui';
 import { api } from '../lib/api';
 
 type BillingPeriod = 'monthly' | 'yearly';
@@ -25,7 +25,7 @@ const PLANS: Plan[] = [
     tagline: 'Core CRM free forever. Perfect for solo founders getting started.',
     priceMonthly: 0,
     priceYearly: 0,
-    cta: 'Current Core Tier',
+    cta: 'View Plan Details',
     ctaVariant: 'ghost',
     features: [
       '1 user, up to 500 contacts',
@@ -43,7 +43,7 @@ const PLANS: Plan[] = [
     tagline: 'For early sales teams wanting essential AI with starter quotas.',
     priceMonthly: 19,
     priceYearly: 15,
-    cta: 'Get Plus — Starter AI',
+    cta: 'View Plan Details',
     ctaVariant: 'ghost',
     features: [
       'Up to 3 users, 2,500 contacts',
@@ -63,10 +63,10 @@ const PLANS: Plan[] = [
     tagline: 'For high-velocity SDR teams who need high limits & call analysis.',
     priceMonthly: 49,
     priceYearly: 39,
-    cta: 'Start Pro — 14 days free',
+    cta: 'Current Plan Active',
     ctaVariant: 'primary',
     highlight: true,
-    badge: 'Most popular',
+    badge: 'Active plan',
     features: [
       'Up to 10 users, unlimited contacts',
       'Everything in Plus',
@@ -84,7 +84,7 @@ const PLANS: Plan[] = [
     tagline: 'For orgs that need control, compliance and unlimited scale.',
     priceMonthly: null,
     priceYearly: null,
-    cta: 'Talk to founders',
+    cta: 'Talk to Enterprise',
     ctaVariant: 'enterprise',
     features: [
       'Unlimited users & unlimited contacts',
@@ -122,17 +122,16 @@ function Check({ on }: { on: boolean }) {
 
 export function SubscriptionPage() {
   const [period, setPeriod] = useState<BillingPeriod>('monthly');
-  const [currentPlan, setCurrentPlan] = useState<string>('free');
+  const [currentPlan, setCurrentPlan] = useState<string>('pro');
   const [loadingPlan, setLoadingPlan] = useState(true);
-  const [switching, setSwitching] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const [selectedPlanDetails, setSelectedPlanDetails] = useState<Plan | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     api<{ plan: string } | { subscriptionPlan: string } | Record<string, unknown>>('/api/subscription')
       .then((data: Record<string, unknown>) => {
         if (cancelled) return;
-        const plan = (data.plan as string) || (data.subscriptionPlan as string) || 'free';
+        const plan = (data.plan as string) || (data.subscriptionPlan as string) || 'pro';
         setCurrentPlan(plan);
       })
       .catch(() => {
@@ -150,28 +149,8 @@ export function SubscriptionPage() {
     };
   }, []);
 
-  const handleSwitch = async (planId: string) => {
-    if (planId === 'enterprise') {
-      window.open('https://www.convobrains.com/contact', '_blank', 'noopener,noreferrer');
-      return;
-    }
-    setSwitching(planId);
-    setMessage(null);
-    try {
-      const res = await api<{ plan: string }>('/api/subscription', {
-        method: 'PATCH',
-        body: JSON.stringify({ plan: planId }),
-      });
-      setCurrentPlan(res.plan);
-      setMessage(`Switched to ${res.plan.toUpperCase()} plan. ${res.plan === 'free' ? 'Core CRM is active (AI features locked).' : res.plan === 'plus' ? 'Plus tier active with starter AI quotas.' : 'Pro tier active with high AI limits & call analysis.'}`);
-      try {
-        await api('/api/config');
-      } catch {}
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : 'Failed to switch plan. Only founders/admins can switch.');
-    } finally {
-      setSwitching(null);
-    }
+  const handlePlanClick = (plan: Plan) => {
+    setSelectedPlanDetails(plan);
   };
 
   return (
@@ -195,7 +174,6 @@ export function SubscriptionPage() {
             </p>
           </div>
         )}
-        {message ? <p className="mx-auto max-w-xl rounded-none bg-amber-50 px-3 py-2 text-xs text-amber-800">{message}</p> : null}
         <div className="flex flex-col items-center justify-center gap-2 pt-2">
           <div className="inline-flex rounded-none border border-[var(--color-line)] bg-stone-50 p-1 shadow-sm">
             <button
@@ -259,21 +237,14 @@ export function SubscriptionPage() {
                   <p className="mt-1 text-xs text-stone-500">Tailored pricing & terms</p>
                 )}
               </div>
-              {plan.id === 'enterprise' ? (
-                <a href="https://www.convobrains.com/contact" target="_blank" rel="noreferrer" className={btnPrimary + ' mt-5 w-full bg-stone-900 hover:bg-black text-center'}>
-                  {plan.cta}
-                </a>
-              ) : (
-                <button
-                  type="button"
-                  disabled={isCurrent || switching === plan.id}
-                  onClick={() => handleSwitch(plan.id)}
-                  className={(plan.ctaVariant === 'primary' ? btnPrimary : btnGhost) + ' mt-5 w-full disabled:opacity-60'}
-                >
-                  {switching === plan.id ? 'Switching…' : isCurrent ? 'Current plan' : plan.cta}
-                </button>
-              )}
-              <p className="mt-2 text-center text-[11px] text-stone-400">{plan.id === 'enterprise' ? 'Response within 1 business day' : isCurrent ? 'Active plan' : plan.id === 'free' ? 'No card required' : 'Instant activation'}</p>
+              <button
+                type="button"
+                onClick={() => handlePlanClick(plan)}
+                className={(isCurrent ? btnPrimary : plan.id === 'enterprise' ? btnPrimary + ' bg-stone-900 hover:bg-black' : btnGhost) + ' mt-5 w-full'}
+              >
+                {isCurrent ? 'Current Plan Active' : plan.cta}
+              </button>
+              <p className="mt-2 text-center text-[11px] text-stone-400">{plan.id === 'enterprise' ? 'Custom SLA & deployment' : isCurrent ? 'Active on your account' : 'View plan overview'}</p>
               <ul className="mt-6 space-y-2">
                 {plan.features.map((f) => (
                   <li key={f} className="flex gap-2 text-sm leading-snug text-stone-700">
@@ -360,9 +331,176 @@ export function SubscriptionPage() {
         <h4 className="text-sm font-semibold text-stone-900">How gating works</h4>
         <p className="mt-1 text-xs leading-relaxed text-stone-600">
           Server checks <code className="rounded bg-white px-1 py-0.5 text-[11px]">app_settings.subscription_plan</code> on every <code className="rounded bg-white px-1 py-0.5 text-[11px]">/api/import/voice/*</code>,{' '}
-          <code className="rounded bg-white px-1 py-0.5 text-[11px]">/api/import/image/*</code>, <code className="rounded bg-white px-1 py-0.5 text-[11px]">/api/ai/score</code> and <code className="rounded bg-white px-1 py-0.5 text-[11px]">/api/conversations/*/transcribe</code>. Plus gets <code className="rounded bg-white px-1 py-0.5 text-[11px]">402</code> with <code className="rounded bg-white px-1 py-0.5 text-[11px]">SUBSCRIPTION_REQUIRED</code>. Use the buttons above to switch plans instantly (admin/founder only, no payment yet).
+          <code className="rounded bg-white px-1 py-0.5 text-[11px]">/api/import/image/*</code>, <code className="rounded bg-white px-1 py-0.5 text-[11px]">/api/ai/score</code> and <code className="rounded bg-white px-1 py-0.5 text-[11px]">/api/conversations/*/transcribe</code>. Pro tier includes unlimited lead scoring, 500 voice/image extractions/mo, and sales call analysis.
         </p>
       </section>
+
+      <Modal
+        open={!!selectedPlanDetails}
+        title={
+          selectedPlanDetails?.id === 'free' || selectedPlanDetails?.id === 'plus'
+            ? 'Plan Comparison & Notice'
+            : selectedPlanDetails?.id === 'enterprise'
+            ? 'Enterprise Plan Overview'
+            : 'Active Pro Plan Overview'
+        }
+        onClose={() => setSelectedPlanDetails(null)}
+        wide
+      >
+        {selectedPlanDetails ? (
+          <div className="space-y-5">
+            {selectedPlanDetails.id === 'free' || selectedPlanDetails.id === 'plus' ? (
+              <div className="space-y-4">
+                <div className="rounded-none border border-emerald-300 bg-emerald-50/90 p-4">
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-700 text-xs font-bold text-white">★</span>
+                    <div>
+                      <h3 className="text-sm font-bold text-emerald-950">
+                        You already have a better plan: Pro Tier Active
+                      </h3>
+                      <p className="mt-1 text-xs text-emerald-900 leading-relaxed">
+                        Your CRM instance is currently powered by the <span className="font-semibold">Pro Plan ($49/mo)</span>, which includes our highest AI limits, full call recording analysis, and team quotas. Switching to the <span className="font-semibold">{selectedPlanDetails.name}</span> plan would significantly restrict your capabilities.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-none border border-[var(--color-line)] bg-stone-50/60 p-4">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-stone-600 mb-2.5">
+                    What you would lose if downgrading to {selectedPlanDetails.name}:
+                  </h4>
+                  <ul className="space-y-2.5 text-xs text-stone-700">
+                    <li className="flex items-start gap-2">
+                      <span className="text-rose-600 font-bold">✕</span>
+                      <span>
+                        <strong className="text-stone-900">Voice AI Extraction:</strong> Drops from <span className="font-semibold text-teal-800">500 notes/mo</span> down to {selectedPlanDetails.id === 'free' ? <span className="text-rose-700 font-semibold">0 (Locked in Free)</span> : <span className="font-semibold">50 notes/mo in Plus</span>}.
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-rose-600 font-bold">✕</span>
+                      <span>
+                        <strong className="text-stone-900">Business Card OCR:</strong> Drops from <span className="font-semibold text-teal-800">500 scans/mo</span> down to {selectedPlanDetails.id === 'free' ? <span className="text-rose-700 font-semibold">0 (Locked in Free)</span> : <span className="font-semibold">50 scans/mo in Plus</span>}.
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-rose-600 font-bold">✕</span>
+                      <span>
+                        <strong className="text-stone-900">AI Lead Scoring:</strong> Drops from <span className="font-semibold text-teal-800">Unlimited volume</span> down to {selectedPlanDetails.id === 'free' ? <span className="text-rose-700 font-semibold">0 (Locked in Free)</span> : <span className="font-semibold">200 leads/mo in Plus</span>}.
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-rose-600 font-bold">✕</span>
+                      <span>
+                        <strong className="text-stone-900">Sales Call Recording STT & AI Analysis:</strong> <span className="font-semibold text-teal-800">Fully active on Pro</span> ➔ {selectedPlanDetails.id === 'free' ? <span className="text-rose-700 font-semibold">Locked in Free</span> : <span className="text-rose-700 font-semibold">Locked in Plus (Pro-only feature)</span>}.
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-rose-600 font-bold">✕</span>
+                      <span>
+                        <strong className="text-stone-900">Team Member Capacity:</strong> Supports <span className="font-semibold text-teal-800">up to 10 SDR seats</span> ➔ {selectedPlanDetails.id === 'free' ? <span className="text-stone-600">1 single user</span> : <span className="text-stone-600">Up to 3 users</span>}.
+                      </span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-[var(--color-line)]">
+                  <button
+                    type="button"
+                    className={btnPrimary}
+                    onClick={() => setSelectedPlanDetails(null)}
+                  >
+                    Keep My Pro Plan (Recommended)
+                  </button>
+                </div>
+              </div>
+            ) : selectedPlanDetails.id === 'enterprise' ? (
+              <div className="space-y-4">
+                <div className="rounded-none border border-stone-300 bg-stone-900 text-white p-4">
+                  <h3 className="text-sm font-bold">Custom Enterprise Scale & Compliance</h3>
+                  <p className="mt-1 text-xs text-stone-300 leading-relaxed">
+                    Designed for mid-market and enterprise sales organizations requiring dedicated infrastructure, SAML SSO, on-prem VPC hosting, custom ICP tuning, and unlimited AI quotas.
+                  </p>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2 text-xs">
+                  <div className="rounded-none border border-[var(--color-line)] p-3 space-y-1">
+                    <h5 className="font-bold text-stone-900">Dedicated Scale</h5>
+                    <p className="text-stone-600">Unlimited users, contacts, audio transcription hours, and card scans.</p>
+                  </div>
+                  <div className="rounded-none border border-[var(--color-line)] p-3 space-y-1">
+                    <h5 className="font-bold text-stone-900">Security & Compliance</h5>
+                    <p className="text-stone-600">SSO/SAML 2.0, SCIM provisioning, custom RBAC permissions, and audit trails.</p>
+                  </div>
+                  <div className="rounded-none border border-[var(--color-line)] p-3 space-y-1">
+                    <h5 className="font-bold text-stone-900">Custom AI Models</h5>
+                    <p className="text-stone-600">Fine-tuned ICP scoring models and private on-prem LLM inference support.</p>
+                  </div>
+                  <div className="rounded-none border border-[var(--color-line)] p-3 space-y-1">
+                    <h5 className="font-bold text-stone-900">Dedicated SLA & Support</h5>
+                    <p className="text-stone-600">99.9% uptime SLA, 1-hour priority support response, and migration assistance.</p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-[var(--color-line)]">
+                  <button
+                    type="button"
+                    className={btnGhost}
+                    onClick={() => setSelectedPlanDetails(null)}
+                  >
+                    Close
+                  </button>
+                  <a
+                    href="https://www.convobrains.com/contact"
+                    target="_blank"
+                    rel="noreferrer"
+                    className={btnPrimary + ' bg-stone-900 hover:bg-black'}
+                  >
+                    Contact Enterprise Sales →
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="rounded-none border border-teal-300 bg-teal-50 p-4">
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-700 text-xs font-bold text-white">✓</span>
+                    <div>
+                      <h3 className="text-sm font-bold text-teal-950">
+                        Pro Plan Active · All Advanced AI Features Unlocked
+                      </h3>
+                      <p className="mt-1 text-xs text-teal-900 leading-relaxed">
+                        Your account has full access to high-volume Voice AI note extraction, business card OCR, unlimited ICP lead scoring, and sales call conversation analysis.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-none border border-[var(--color-line)] bg-stone-50/50 p-4 space-y-2 text-xs">
+                  <h4 className="font-bold text-stone-800 uppercase tracking-wider text-[11px]">Active Plan Inclusions:</h4>
+                  <ul className="grid gap-2 sm:grid-cols-2 text-stone-700">
+                    <li className="flex items-center gap-1.5"><span className="text-teal-700 font-bold">✓</span> 500 Voice AI extractions / month</li>
+                    <li className="flex items-center gap-1.5"><span className="text-teal-700 font-bold">✓</span> 500 Business card scans / month</li>
+                    <li className="flex items-center gap-1.5"><span className="text-teal-700 font-bold">✓</span> Unlimited AI lead scoring vs ICP</li>
+                    <li className="flex items-center gap-1.5"><span className="text-teal-700 font-bold">✓</span> Call recording STT & conversation analysis</li>
+                    <li className="flex items-center gap-1.5"><span className="text-teal-700 font-bold">✓</span> Up to 10 SDR seats & unlimited contacts</li>
+                    <li className="flex items-center gap-1.5"><span className="text-teal-700 font-bold">✓</span> Priority email support</li>
+                  </ul>
+                </div>
+
+                <div className="flex justify-end pt-2 border-t border-[var(--color-line)]">
+                  <button
+                    type="button"
+                    className={btnPrimary}
+                    onClick={() => setSelectedPlanDetails(null)}
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : null}
+      </Modal>
     </div>
   );
 }

@@ -85,7 +85,7 @@ export function asDiscoveryQuestions(value: unknown): DiscoveryQuestion[] {
 
 function asSubscriptionPlan(v: unknown): SubscriptionPlan {
   if (v === 'free' || v === 'plus' || v === 'pro' || v === 'enterprise') return v;
-  return 'free';
+  return 'pro';
 }
 
 function rowToSettings(row: Record<string, unknown>): AppSettings {
