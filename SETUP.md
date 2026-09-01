@@ -277,39 +277,73 @@ node testing/functional/prepare.mjs
 
 ---
 
-## 8. AI Integrations & Provider Setup
+## 8. AI Integrations & API Key Setup
 
-Zero Cost CRM supports multi-provider AI out of the box for Voice STT, Business Card OCR, and Lead Scoring.
+Zero Cost CRM supports multi-provider AI out of the box for Voice STT, Business Card OCR, Lead Scoring vs ICP, and Call Recording Intelligence.
 
-### Provider Matrix
+### 🚀 Easiest: Interactive Setup Wizard (1 Command)
 
-| Feature           | Groq (Fastest / Free Tier)     | OpenAI               | Google Gemini      | Local / Ollama      |
-| :---------------- | :----------------------------- | :------------------- | :----------------- | :------------------ |
-| **Voice STT**     | `whisper-large-v3`             | `whisper-1`          | Gemini Audio       | Local Whisper       |
-| **Card OCR**      | `llama-3.2-11b-vision-preview` | `gpt-4o-mini`        | `gemini-1.5-flash` | LLaVA / Ollama      |
-| **ICP Scoring**   | `llama-3.3-70b-versatile`      | `gpt-4o-mini`        | `gemini-1.5-flash` | `llama3.2`          |
-| **Call Analysis** | `whisper-large-v3` + LLaMA     | `whisper-1` + GPT-4o | Gemini Multimodal  | Whisper + Local LLM |
+Run our interactive terminal wizard to configure your AI provider and API key in seconds:
 
-### Enabling Groq (Recommended for Speed & Cost)
+```bash
+npm run setup:env
+```
 
-Add to your `.env.local`:
+This wizard prompts for your provider (Groq, OpenAI, Gemini, Anthropic), asks for your key, validates database defaults, and automatically populates `.env.local` and `.env`.
 
+---
+
+### ⚡ Automatic Key & Provider Auto-Detection
+
+You don't need to manually configure 5 different variables. Simply paste your API key into `.env.local`:
+
+```env
+AI_API_KEY=gsk_your_groq_or_openai_api_key_here
+```
+
+Zero Cost CRM automatically detects the provider and applies optimal model configurations:
+- `gsk_...` ➔ Automatically selects **Groq** (`whisper-large-v3` + `llama-3.3-70b-versatile` + `llama-3.2-11b-vision-preview`)
+- `sk-proj-...` / `sk-...` ➔ Automatically selects **OpenAI** (`whisper-1` + `gpt-4o-mini`)
+- `AIzaSy...` ➔ Automatically selects **Google Gemini** (`gemini-1.5-flash`)
+- `sk-ant-...` ➔ Automatically selects **Anthropic** (`claude-3-5-sonnet-20241022`)
+
+You can also use provider-specific environment variables directly:
+`GROQ_API_KEY=gsk_...` or `OPENAI_API_KEY=sk-...` or `GEMINI_API_KEY=AIzaSy...`.
+
+---
+
+### Provider Capability Matrix
+
+| Feature | Groq (Recommended · Fast & Free Tier) | OpenAI | Google Gemini | Anthropic / Local |
+| :--- | :--- | :--- | :--- | :--- |
+| **Voice STT** | `whisper-large-v3` | `whisper-1` | `gemini-1.5-flash` | Local Whisper |
+| **Card OCR** | `llama-3.2-11b-vision-preview` | `gpt-4o-mini` | `gemini-1.5-flash` | Claude 3.5 Sonnet / LLaVA |
+| **ICP Scoring** | `llama-3.3-70b-versatile` | `gpt-4o-mini` | `gemini-1.5-flash` | Claude 3.5 Sonnet / LLaMA |
+| **Call Analysis** | `whisper-large-v3` + LLaMA | `whisper-1` + GPT-4o | `gemini-1.5-flash` | Whisper + Claude |
+
+---
+
+### Manual Configuration Examples
+
+#### 1. Groq (Recommended: Fastest Voice STT & Generous Free Quota)
+Get a free key at [console.groq.com/keys](https://console.groq.com/keys):
 ```env
 AI_PROVIDER=groq
 AI_API_KEY=gsk_your_groq_api_key_here
-AI_MODEL=llama-3.3-70b-versatile
-STT_MODEL=whisper-large-v3
-VISION_MODEL=llama-3.2-11b-vision-preview
 ```
 
-### Enabling OpenAI
-
+#### 2. OpenAI
+Get a key at [platform.openai.com/api-keys](https://platform.openai.com/api-keys):
 ```env
 AI_PROVIDER=openai
 AI_API_KEY=sk-proj-your_openai_key_here
-AI_MODEL=gpt-4o-mini
-STT_MODEL=whisper-1
-VISION_MODEL=gpt-4o-mini
+```
+
+#### 3. Google Gemini
+Get a key at [aistudio.google.com](https://aistudio.google.com/):
+```env
+AI_PROVIDER=gemini
+AI_API_KEY=AIzaSy_your_gemini_key_here
 ```
 
 ---

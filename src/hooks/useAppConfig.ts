@@ -53,6 +53,10 @@ export function useAppConfig() {
         allowedEmailDomain: cfg.allowedEmailDomain,
         allowedEmailDomains: cfg.allowedEmailDomains ?? ['*'],
         allowAnyEmailDomain: !!cfg.allowAnyEmailDomain,
+        aiConfigured: cfg.aiConfigured,
+        aiProvider: cfg.aiProvider,
+        aiModel: cfg.aiModel,
+        sttModel: cfg.sttModel,
       });
     } catch {
       /* keep fallback until API is up */

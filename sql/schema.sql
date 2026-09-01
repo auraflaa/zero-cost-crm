@@ -365,3 +365,18 @@ CREATE TABLE IF NOT EXISTS sdr_daily_targets (
 INSERT INTO sdr_daily_targets (calls_target, follow_ups_target, demos_target)
 SELECT 80, 25, 4
 WHERE NOT EXISTS (SELECT 1 FROM sdr_daily_targets);
+
+CREATE TABLE IF NOT EXISTS call_requests (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  full_name       TEXT NOT NULL,
+  email           TEXT NOT NULL,
+  company_name    TEXT NOT NULL,
+  phone           TEXT NOT NULL DEFAULT '',
+  team_size       TEXT NOT NULL DEFAULT '',
+  primary_goal    TEXT NOT NULL DEFAULT '',
+  preferred_time  TEXT NOT NULL DEFAULT '',
+  notes           TEXT NOT NULL DEFAULT '',
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS call_requests_created_idx ON call_requests (created_at DESC);

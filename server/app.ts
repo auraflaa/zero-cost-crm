@@ -163,6 +163,10 @@ app.get('/api/config', async (_req, res) => {
       allowedEmailDomain: config.primaryEmailDomain,
       allowedEmailDomains: config.allowedEmailAny ? ['*'] : config.allowedEmailDomains,
       allowAnyEmailDomain: config.allowedEmailAny,
+      aiConfigured: Boolean(config.ai.apiKey && config.ai.provider !== 'mock'),
+      aiProvider: config.ai.provider,
+      aiModel: config.ai.model,
+      sttModel: config.ai.whisperModel,
     });
   } catch (e) {
     res.status(500).json({
@@ -1709,6 +1713,94 @@ if (config.nodeEnv !== 'test') {
     } catch {}
   }, 8000);
 }
+
+// ─── Call Request / Consultation Booking ───────────────────────────────────
+
+app.post('/api/calls/request', async (req, res) => {
+  const b = req.body as Record<string, unknown>;
+  const fullName =
+    typeof b.name === 'string'
+      ? b.name.trim()
+      : typeof b.fullName === 'string'
+      ? b.fullName.trim()
+      : '';
+  const email = typeof b.email === 'string' ? b.email.trim().toLowerCase() : '';
+  const companyName =
+    typeof b.company === 'string'
+      ? b.company.trim()
+      : typeof b.companyName === 'string'
+      ? b.companyName.trim()
+      : '';
+  const phone = typeof b.phone === 'string' ? b.phone.trim() : '';
+  const teamSize = typeof b.teamSize === 'string' ? b.teamSize.trim() : '';
+  const primaryGoal = typeof b.primaryGoal === 'string' ? b.primaryGoal.trim() : '';
+  const preferredTime = typeof b.preferredTime === 'string' ? b.preferredTime.trim() : '';
+  const notes = typeof b.notes === 'string' ? b.notes.trim() : '';
+
+  if (!fullName || !email || !companyName) {
+    res
+      .status(400)
+      .json({ error: 'Name, email, and company name are required to book a call.' });
+    return;
+  }
+
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS call_requests (
+        id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        full_name       TEXT NOT NULL,
+        email           TEXT NOT NULL,
+        company_name    TEXT NOT NULL,
+        phone           TEXT NOT NULL DEFAULT '',
+        team_size       TEXT NOT NULL DEFAULT '',
+        primary_goal    TEXT NOT NULL DEFAULT '',
+        preferred_time  TEXT NOT NULL DEFAULT '',
+        notes           TEXT NOT NULL DEFAULT '',
+        created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+    `);
+
+    const result = await pool.query(
+      `INSERT INTO call_requests (full_name, email, company_name, phone, team_size, primary_goal, preferred_time, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, full_name, email, company_name, created_at`,
+      [fullName, email, companyName, phone, teamSize, primaryGoal, preferredTime, notes]
+    );
+
+    res.status(201).json({
+      ok: true,
+      message: 'Discovery call request received. A calendar invite has been generated.',
+      request: result.rows[0],
+    });
+  } catch (err) {
+    console.error('Call request save failed:', err);
+    res.status(500).json({ error: 'Failed to record call request.' });
+  }
+});
+
+// ─── Payment Simulation (Zero-charge demo billing) ──────────────────────────
+
+app.post('/api/subscription/simulate-payment', async (req, res) => {
+  const b = req.body as Record<string, unknown>;
+  const plan = typeof b.plan === 'string' ? b.plan : 'pro';
+  const cycle = typeof b.cycle === 'string' ? b.cycle : 'monthly';
+  const cardLast4 = typeof b.cardLast4 === 'string' ? b.cardLast4 : '4242';
+  const randomRef = Math.random().toString(36).substring(2, 8).toUpperCase();
+  const invoiceId = `INV-2026-${randomRef}`;
+
+  // Simulates instant zero-charge activation
+  res.json({
+    ok: true,
+    invoiceId,
+    plan,
+    cycle,
+    cardLast4,
+    chargedAmount: 0.0,
+    status: 'paid',
+    message: 'Demo payment simulated successfully. Zero charges were processed.',
+    activatedAt: new Date().toISOString(),
+  });
+});
 
 if (process.env.NODE_ENV === 'production') {
   const distPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist');

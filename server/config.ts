@@ -51,6 +51,60 @@ const emailPolicy = parseAllowedEmailDomains();
 
 const corsOrigins = parseList(read('CORS_ORIGINS'));
 
+function resolveAiConfig() {
+  const genericKey = read('AI_API_KEY');
+  const groqKey = read('GROQ_API_KEY');
+  const openaiKey = read('OPENAI_API_KEY');
+  const geminiKey = read('GEMINI_API_KEY');
+  const anthropicKey = read('ANTHROPIC_API_KEY');
+  const deepseekKey = read('DEEPSEEK_API_KEY');
+
+  const apiKey = genericKey || groqKey || openaiKey || geminiKey || anthropicKey || deepseekKey;
+
+  let provider = read('AI_PROVIDER');
+  if (!provider) {
+    if (groqKey || (apiKey && apiKey.startsWith('gsk_'))) {
+      provider = 'groq';
+    } else if (openaiKey || (apiKey && (apiKey.startsWith('sk-proj-') || apiKey.startsWith('sk-')))) {
+      provider = 'openai';
+    } else if (geminiKey || (apiKey && apiKey.startsWith('AIzaSy'))) {
+      provider = 'gemini';
+    } else if (anthropicKey || (apiKey && apiKey.startsWith('sk-ant-'))) {
+      provider = 'anthropic';
+    } else if (apiKey) {
+      provider = 'groq';
+    } else {
+      provider = 'mock';
+    }
+  }
+
+  let defaultModel = 'gpt-4o-mini';
+  let defaultVisionModel = 'gpt-4o-mini';
+  let defaultWhisperModel = 'whisper-1';
+
+  if (provider === 'groq') {
+    defaultModel = 'llama-3.3-70b-versatile';
+    defaultVisionModel = 'llama-3.2-11b-vision-preview';
+    defaultWhisperModel = 'whisper-large-v3';
+  } else if (provider === 'gemini') {
+    defaultModel = 'gemini-1.5-flash';
+    defaultVisionModel = 'gemini-1.5-flash';
+    defaultWhisperModel = 'gemini-1.5-flash';
+  } else if (provider === 'anthropic') {
+    defaultModel = 'claude-3-5-sonnet-20241022';
+    defaultVisionModel = 'claude-3-5-sonnet-20241022';
+    defaultWhisperModel = 'whisper-large-v3';
+  }
+
+  return {
+    provider,
+    apiKey,
+    model: read('AI_MODEL') ?? defaultModel,
+    visionModel: read('AI_VISION_MODEL') ?? defaultVisionModel,
+    whisperModel: read('AI_WHISPER_MODEL') ?? defaultWhisperModel,
+  };
+}
+
 export const config = {
   nodeEnv,
   isProd,
@@ -68,13 +122,7 @@ export const config = {
     region: read('AWS_REGION'),
     bucket: read('AWS_S3_BUCKET'),
   },
-  ai: {
-    provider: read('AI_PROVIDER') ?? 'mock',
-    apiKey: read('AI_API_KEY'),
-    model: read('AI_MODEL') ?? 'gpt-4o-mini',
-    visionModel: read('AI_VISION_MODEL') ?? 'gpt-4o-mini',
-    whisperModel: read('AI_WHISPER_MODEL') ?? 'whisper-1',
-  },
+  ai: resolveAiConfig(),
 } as const;
 
 export function isAllowedEmail(email: string): boolean {

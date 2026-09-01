@@ -228,4 +228,8 @@ export interface AppConfig {
   allowedEmailDomain: string | null;
   allowedEmailDomains: string[];
   allowAnyEmailDomain: boolean;
+  aiConfigured?: boolean;
+  aiProvider?: string;
+  aiModel?: string;
+  sttModel?: string;
 }

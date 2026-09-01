@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { btnPrimary, btnGhost, Modal } from './ui';
+import { useEffect, useState, type FormEvent } from 'react';
+import { btnPrimary, btnGhost, Modal, inputClass, Field } from './ui';
 import { api } from '../lib/api';
 
 type BillingPeriod = 'monthly' | 'yearly';
@@ -84,7 +84,7 @@ const PLANS: Plan[] = [
     tagline: 'For orgs that need control, compliance and unlimited scale.',
     priceMonthly: null,
     priceYearly: null,
-    cta: 'Talk to Enterprise',
+    cta: 'Book Discovery Call',
     ctaVariant: 'enterprise',
     features: [
       'Unlimited users & unlimited contacts',
@@ -126,6 +126,43 @@ export function SubscriptionPage() {
   const [loadingPlan, setLoadingPlan] = useState(true);
   const [selectedPlanDetails, setSelectedPlanDetails] = useState<Plan | null>(null);
 
+  // Discovery Call Modal state
+  const [showCallModal, setShowCallModal] = useState(false);
+  const [callForm, setCallForm] = useState({
+    name: '',
+    email: '',
+    company: '',
+    phone: '',
+    teamSize: '1–5 SDRs',
+    primaryGoal: 'Call Recording STT & Intelligence',
+    preferredTime: 'Tomorrow Morning (9am–12pm)',
+    notes: '',
+  });
+  const [callBusy, setCallBusy] = useState(false);
+  const [callResult, setCallResult] = useState<{ id?: string; message?: string } | null>(null);
+  const [callError, setCallError] = useState<string | null>(null);
+
+  // Demo Payment / Billing Simulation Modal state
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentForm, setPaymentForm] = useState({
+    nameOnCard: 'Founder Seed',
+    cardNumber: '4242 •••• •••• 4242',
+    expDate: '12 / 28',
+    cvc: '123',
+    zip: '94107',
+    country: 'United States',
+  });
+  const [promoCode, setPromoCode] = useState('');
+  const [promoApplied, setPromoApplied] = useState(false);
+  const [paymentBusy, setPaymentBusy] = useState(false);
+  const [paymentResult, setPaymentResult] = useState<{
+    invoiceId: string;
+    chargedAmount: number;
+    activatedAt: string;
+    plan: string;
+  } | null>(null);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     api<{ plan: string } | { subscriptionPlan: string } | Record<string, unknown>>('/api/subscription')
@@ -150,7 +187,55 @@ export function SubscriptionPage() {
   }, []);
 
   const handlePlanClick = (plan: Plan) => {
-    setSelectedPlanDetails(plan);
+    if (plan.id === 'enterprise') {
+      setShowCallModal(true);
+    } else {
+      setSelectedPlanDetails(plan);
+    }
+  };
+
+  const submitCallBooking = async (e: FormEvent) => {
+    e.preventDefault();
+    setCallBusy(true);
+    setCallError(null);
+    try {
+      const res = await api<{ ok: boolean; message: string; request: { id: string } }>('/api/calls/request', {
+        method: 'POST',
+        body: JSON.stringify(callForm),
+      });
+      setCallResult({ id: res.request?.id, message: res.message });
+    } catch (err) {
+      setCallError(err instanceof Error ? err.message : 'Failed to submit call request. Please try again.');
+    } finally {
+      setCallBusy(false);
+    }
+  };
+
+  const submitSimulatedPayment = async (e: FormEvent) => {
+    e.preventDefault();
+    setPaymentBusy(true);
+    setPaymentError(null);
+    try {
+      const res = await api<{
+        ok: boolean;
+        invoiceId: string;
+        chargedAmount: number;
+        activatedAt: string;
+        plan: string;
+      }>('/api/subscription/simulate-payment', {
+        method: 'POST',
+        body: JSON.stringify({
+          plan: 'pro',
+          cycle: period,
+          cardLast4: paymentForm.cardNumber.replace(/\D/g, '').slice(-4) || '4242',
+        }),
+      });
+      setPaymentResult(res);
+    } catch (err) {
+      setPaymentError(err instanceof Error ? err.message : 'Payment simulation failed.');
+    } finally {
+      setPaymentBusy(false);
+    }
   };
 
   return (
@@ -168,10 +253,32 @@ export function SubscriptionPage() {
         {loadingPlan ? (
           <p className="text-xs text-stone-500">Loading current plan…</p>
         ) : (
-          <div className="flex justify-center">
+          <div className="flex flex-wrap items-center justify-center gap-3">
             <p className="inline-flex items-center gap-2 rounded-none bg-teal-50 px-3.5 py-1.5 text-xs font-semibold text-teal-900 ring-1 ring-teal-200">
-              Current plan: <span className="uppercase">{currentPlan}</span> {currentPlan === 'free' ? '· Core CRM Free' : currentPlan === 'plus' ? '· Starter AI Active' : currentPlan === 'pro' ? '· High AI Limits Active' : '· Everything Unlocked'}
+              Current plan: <span className="uppercase">{currentPlan}</span> · High AI Limits & Call Intelligence Active
             </p>
+            <button
+              type="button"
+              onClick={() => {
+                setPaymentResult(null);
+                setPaymentError(null);
+                setShowPaymentModal(true);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-none border border-[var(--color-line)] bg-white px-3 py-1.5 text-xs font-medium text-stone-700 shadow-sm hover:bg-stone-50 hover:text-stone-900"
+            >
+              <span>💳</span> Manage Payment Method (Demo)
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setCallResult(null);
+                setCallError(null);
+                setShowCallModal(true);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-none border border-teal-300 bg-teal-50/80 px-3 py-1.5 text-xs font-semibold text-teal-800 hover:bg-teal-100"
+            >
+              <span>📞</span> Book Discovery Call
+            </button>
           </div>
         )}
         <div className="flex flex-col items-center justify-center gap-2 pt-2">
@@ -300,9 +407,17 @@ export function SubscriptionPage() {
           <p className="text-xs text-stone-600">
             <span className="font-semibold text-stone-900">Enforced:</span> Free users have unlimited core CRM. Plus/Pro/Enterprise tiers unlock AI voice extraction, card OCR, and ICP scoring.
           </p>
-          <a href="https://www.convobrains.com/contact" target="_blank" rel="noreferrer" className="text-xs font-semibold text-teal-800 underline-offset-2 hover:underline">
-            Enterprise demo →
-          </a>
+          <button
+            type="button"
+            onClick={() => {
+              setCallResult(null);
+              setCallError(null);
+              setShowCallModal(true);
+            }}
+            className="text-xs font-semibold text-teal-800 underline-offset-2 hover:underline"
+          >
+            Schedule Enterprise Demo Call →
+          </button>
         </div>
       </section>
 
@@ -316,14 +431,28 @@ export function SubscriptionPage() {
           </p>
         </div>
         <div className="rounded-none border border-[var(--color-line)] bg-[var(--color-panel)] p-5">
-          <h4 className="text-sm font-semibold text-stone-900">How enterprise call works</h4>
+          <h4 className="text-sm font-semibold text-stone-900">How discovery call works</h4>
           <p className="mt-1 text-xs leading-relaxed text-stone-600">
-            Book at <a className="font-medium text-teal-800 hover:underline" href="https://www.convobrains.com/contact" target="_blank" rel="noreferrer">convobrains.com/contact</a>. We map your ICP, migrate your Sheets/Salesforce, and tune private LLM + on-prem if needed. Typical close in 1–2 calls.
+            Click{' '}
+            <button
+              type="button"
+              onClick={() => {
+                setCallResult(null);
+                setCallError(null);
+                setShowCallModal(true);
+              }}
+              className="font-medium text-teal-800 underline hover:text-teal-900"
+            >
+              Book Discovery Call
+            </button>
+            . We map your ICP, migrate your Sheets/Salesforce, and configure private LLM + on-prem if needed.
           </p>
         </div>
         <div className="rounded-none border border-[var(--color-line)] bg-[var(--color-panel)] p-5">
-          <h4 className="text-sm font-semibold text-stone-900">No lock-in</h4>
-          <p className="mt-1 text-xs leading-relaxed text-stone-600">Export anytime, cancel in Settings → Subscription. Yearly saves 20%. Prices in USD, excl. tax.</p>
+          <h4 className="text-sm font-semibold text-stone-900">No lock-in & Demo Billing</h4>
+          <p className="mt-1 text-xs leading-relaxed text-stone-600">
+            Export anytime. Simulated billing allows testing the complete checkout flow with zero credit card charges.
+          </p>
         </div>
       </section>
 
@@ -335,6 +464,7 @@ export function SubscriptionPage() {
         </p>
       </section>
 
+      {/* Modal 1: Plan Details & Downgrade Prevention */}
       <Modal
         open={!!selectedPlanDetails}
         title={
@@ -413,52 +543,6 @@ export function SubscriptionPage() {
                   </button>
                 </div>
               </div>
-            ) : selectedPlanDetails.id === 'enterprise' ? (
-              <div className="space-y-4">
-                <div className="rounded-none border border-stone-300 bg-stone-900 text-white p-4">
-                  <h3 className="text-sm font-bold">Custom Enterprise Scale & Compliance</h3>
-                  <p className="mt-1 text-xs text-stone-300 leading-relaxed">
-                    Designed for mid-market and enterprise sales organizations requiring dedicated infrastructure, SAML SSO, on-prem VPC hosting, custom ICP tuning, and unlimited AI quotas.
-                  </p>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2 text-xs">
-                  <div className="rounded-none border border-[var(--color-line)] p-3 space-y-1">
-                    <h5 className="font-bold text-stone-900">Dedicated Scale</h5>
-                    <p className="text-stone-600">Unlimited users, contacts, audio transcription hours, and card scans.</p>
-                  </div>
-                  <div className="rounded-none border border-[var(--color-line)] p-3 space-y-1">
-                    <h5 className="font-bold text-stone-900">Security & Compliance</h5>
-                    <p className="text-stone-600">SSO/SAML 2.0, SCIM provisioning, custom RBAC permissions, and audit trails.</p>
-                  </div>
-                  <div className="rounded-none border border-[var(--color-line)] p-3 space-y-1">
-                    <h5 className="font-bold text-stone-900">Custom AI Models</h5>
-                    <p className="text-stone-600">Fine-tuned ICP scoring models and private on-prem LLM inference support.</p>
-                  </div>
-                  <div className="rounded-none border border-[var(--color-line)] p-3 space-y-1">
-                    <h5 className="font-bold text-stone-900">Dedicated SLA & Support</h5>
-                    <p className="text-stone-600">99.9% uptime SLA, 1-hour priority support response, and migration assistance.</p>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-[var(--color-line)]">
-                  <button
-                    type="button"
-                    className={btnGhost}
-                    onClick={() => setSelectedPlanDetails(null)}
-                  >
-                    Close
-                  </button>
-                  <a
-                    href="https://www.convobrains.com/contact"
-                    target="_blank"
-                    rel="noreferrer"
-                    className={btnPrimary + ' bg-stone-900 hover:bg-black'}
-                  >
-                    Contact Enterprise Sales →
-                  </a>
-                </div>
-              </div>
             ) : (
               <div className="space-y-4">
                 <div className="rounded-none border border-teal-300 bg-teal-50 p-4">
@@ -487,7 +571,19 @@ export function SubscriptionPage() {
                   </ul>
                 </div>
 
-                <div className="flex justify-end pt-2 border-t border-[var(--color-line)]">
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[var(--color-line)]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedPlanDetails(null);
+                      setPaymentResult(null);
+                      setPaymentError(null);
+                      setShowPaymentModal(true);
+                    }}
+                    className={btnGhost + ' text-xs'}
+                  >
+                    💳 Manage Billing & Invoices
+                  </button>
                   <button
                     type="button"
                     className={btnPrimary}
@@ -500,6 +596,380 @@ export function SubscriptionPage() {
             )}
           </div>
         ) : null}
+      </Modal>
+
+      {/* Modal 2: Schedule Discovery / Enterprise Consultation Call */}
+      <Modal
+        open={showCallModal}
+        title="Schedule an Enterprise Discovery Call"
+        onClose={() => setShowCallModal(false)}
+        wide
+      >
+        {callResult ? (
+          <div className="space-y-4 py-3 text-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-2xl text-emerald-700">
+              ✓
+            </div>
+            <h3 className="text-lg font-bold text-stone-900">Discovery Call Scheduled!</h3>
+            <p className="mx-auto max-w-md text-xs leading-relaxed text-stone-600">
+              {callResult.message || 'We have received your call request.'} An invite has been generated and sent to <span className="font-semibold text-stone-900">{callForm.email}</span>. A sales engineer will connect with you at your chosen time.
+            </p>
+            {callResult.id ? (
+              <p className="text-[11px] font-mono text-stone-400">
+                Booking Reference: {callResult.id}
+              </p>
+            ) : null}
+            <div className="pt-2">
+              <button
+                type="button"
+                className={btnPrimary}
+                onClick={() => {
+                  setShowCallModal(false);
+                  setCallResult(null);
+                }}
+              >
+                Close & Return to CRM
+              </button>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={submitCallBooking} className="space-y-4">
+            <div className="rounded-none border border-teal-200 bg-teal-50/60 p-3 text-xs text-teal-950">
+              <span className="font-bold">Direct Founder / Solutions Call:</span> We will review your pipeline workflow, ICP criteria, data migration, and on-prem or private LLM requirements.
+            </div>
+
+            {callError ? (
+              <p className="rounded-none border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-700">
+                {callError}
+              </p>
+            ) : null}
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Full Name">
+                <input
+                  type="text"
+                  className={inputClass}
+                  required
+                  placeholder="e.g. Sarah Jenkins"
+                  value={callForm.name}
+                  onChange={(e) => setCallForm((f) => ({ ...f, name: e.target.value }))}
+                />
+              </Field>
+              <Field label="Work Email">
+                <input
+                  type="email"
+                  className={inputClass}
+                  required
+                  placeholder="sarah@company.com"
+                  value={callForm.email}
+                  onChange={(e) => setCallForm((f) => ({ ...f, email: e.target.value }))}
+                />
+              </Field>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Company Name">
+                <input
+                  type="text"
+                  className={inputClass}
+                  required
+                  placeholder="Acme Technologies"
+                  value={callForm.company}
+                  onChange={(e) => setCallForm((f) => ({ ...f, company: e.target.value }))}
+                />
+              </Field>
+              <Field label="Phone / WhatsApp (Optional)">
+                <input
+                  type="text"
+                  className={inputClass}
+                  placeholder="+1 (555) 019-2834"
+                  value={callForm.phone}
+                  onChange={(e) => setCallForm((f) => ({ ...f, phone: e.target.value }))}
+                />
+              </Field>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Sales Team / SDR Headcount">
+                <select
+                  className={inputClass}
+                  value={callForm.teamSize}
+                  onChange={(e) => setCallForm((f) => ({ ...f, teamSize: e.target.value }))}
+                >
+                  <option value="1–5 SDRs">1–5 SDRs / Sales Reps</option>
+                  <option value="6–15 SDRs">6–15 SDRs / Sales Reps</option>
+                  <option value="16–50 SDRs">16–50 SDRs / Sales Reps</option>
+                  <option value="50+ Enterprise">50+ Enterprise Organization</option>
+                </select>
+              </Field>
+              <Field label="Preferred Meeting Window">
+                <select
+                  className={inputClass}
+                  value={callForm.preferredTime}
+                  onChange={(e) => setCallForm((f) => ({ ...f, preferredTime: e.target.value }))}
+                >
+                  <option value="Today / ASAP">Today / ASAP</option>
+                  <option value="Tomorrow Morning (9am–12pm)">Tomorrow Morning (9am–12pm)</option>
+                  <option value="Tomorrow Afternoon (1pm–5pm)">Tomorrow Afternoon (1pm–5pm)</option>
+                  <option value="This Week (Flexible)">This Week (Flexible)</option>
+                </select>
+              </Field>
+            </div>
+
+            <Field label="Primary Objective">
+              <select
+                className={inputClass}
+                value={callForm.primaryGoal}
+                onChange={(e) => setCallForm((f) => ({ ...f, primaryGoal: e.target.value }))}
+              >
+                <option value="Call Recording STT & Intelligence">Sales Call Recording STT & Objection Analysis</option>
+                <option value="Custom ICP Lead Scoring">Fine-tuned ICP Scoring & Custom Discovery Flow</option>
+                <option value="Dedicated VPC / SAML SSO">On-Prem / Private VPC & SSO Deployment</option>
+                <option value="Data Migration from Sheets/Salesforce">Data Migration from Sheets or Salesforce</option>
+                <option value="Other">Other / General Enterprise Inquiry</option>
+              </select>
+            </Field>
+
+            <Field label="Notes / Additional Requirements">
+              <textarea
+                className={`${inputClass} min-h-20 text-xs`}
+                placeholder="Tell us about your current sales stack, team size, and timeline..."
+                value={callForm.notes}
+                onChange={(e) => setCallForm((f) => ({ ...f, notes: e.target.value }))}
+                rows={3}
+              />
+            </Field>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-[var(--color-line)]">
+              <button
+                type="button"
+                className={btnGhost}
+                onClick={() => setShowCallModal(false)}
+                disabled={callBusy}
+              >
+                Cancel
+              </button>
+              <button type="submit" className={btnPrimary} disabled={callBusy}>
+                {callBusy ? 'Scheduling Call…' : 'Schedule Discovery Call'}
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* Modal 3: Payment Checkout Simulation (No Real Payments Processed) */}
+      <Modal
+        open={showPaymentModal}
+        title="Billing & Subscription Checkout"
+        onClose={() => setShowPaymentModal(false)}
+        wide
+      >
+        {paymentResult ? (
+          <div className="space-y-4 py-3 text-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-2xl text-emerald-700">
+              ✓
+            </div>
+            <h3 className="text-lg font-bold text-stone-900">Subscription Active!</h3>
+            <p className="mx-auto max-w-md text-xs leading-relaxed text-stone-600">
+              Your Zero Cost CRM <span className="font-semibold text-stone-900 uppercase">{paymentResult.plan} Tier</span> is active. All voice note STT, card OCR, and ICP scoring quotas are unlocked.
+            </p>
+            <div className="mx-auto max-w-sm rounded-none border border-[var(--color-line)] bg-stone-50 p-3 text-left text-xs space-y-1.5">
+              <div className="flex justify-between">
+                <span className="text-stone-500">Invoice Number:</span>
+                <span className="font-mono font-semibold text-stone-900">{paymentResult.invoiceId}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-stone-500">Amount Charged:</span>
+                <span className="font-bold text-emerald-700">$0.00 (Zero-Cost Trial)</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-stone-500">Payment Status:</span>
+                <span className="font-semibold text-emerald-800">Simulated / Verified</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-stone-500">Activated At:</span>
+                <span className="text-stone-700">{new Date(paymentResult.activatedAt).toLocaleDateString()}</span>
+              </div>
+            </div>
+            <div className="pt-2 flex justify-center gap-2">
+              <button
+                type="button"
+                className={btnPrimary}
+                onClick={() => {
+                  setShowPaymentModal(false);
+                  setPaymentResult(null);
+                }}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={submitSimulatedPayment} className="space-y-4">
+            <div className="rounded-none border border-sky-300 bg-sky-50/80 p-3 text-xs text-sky-950">
+              <span className="font-bold">🧪 Zero Payment Demo Mode:</span> This checkout simulates subscription activation. <strong className="text-sky-900">No real payments or credit card charges will be made.</strong>
+            </div>
+
+            {paymentError ? (
+              <p className="rounded-none border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-700">
+                {paymentError}
+              </p>
+            ) : null}
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              {/* Left Column: Order Summary */}
+              <div className="rounded-none border border-[var(--color-line)] bg-stone-50/70 p-4 space-y-3">
+                <h4 className="font-bold text-xs uppercase tracking-wider text-stone-700">Order Summary</h4>
+                <div className="flex items-start justify-between border-b border-[var(--color-line)]/70 pb-3">
+                  <div>
+                    <p className="font-bold text-sm text-stone-900">Zero Cost CRM — Pro Tier</p>
+                    <p className="text-[11px] text-stone-500">{period === 'yearly' ? 'Billed annually · Save 20%' : 'Billed monthly'}</p>
+                  </div>
+                  <p className="font-bold text-sm text-stone-900">${period === 'yearly' ? '39.00' : '49.00'}<span className="text-xs text-stone-500">/mo</span></p>
+                </div>
+
+                <ul className="space-y-1.5 text-[11px] text-stone-600">
+                  <li className="flex items-center gap-1.5"><span className="text-teal-700 font-bold">✓</span> 500 Voice AI extractions / mo</li>
+                  <li className="flex items-center gap-1.5"><span className="text-teal-700 font-bold">✓</span> 500 Business card scans / mo</li>
+                  <li className="flex items-center gap-1.5"><span className="text-teal-700 font-bold">✓</span> Unlimited AI ICP lead scoring</li>
+                  <li className="flex items-center gap-1.5"><span className="text-teal-700 font-bold">✓</span> Call recording STT & analysis</li>
+                  <li className="flex items-center gap-1.5"><span className="text-teal-700 font-bold">✓</span> Up to 10 team seats</li>
+                </ul>
+
+                <div className="pt-2 border-t border-[var(--color-line)]/70 space-y-1 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-stone-500">Subtotal</span>
+                    <span className="font-medium text-stone-800">${period === 'yearly' ? (39 * 12).toFixed(2) : '49.00'}</span>
+                  </div>
+                  {promoApplied ? (
+                    <div className="flex justify-between text-emerald-700">
+                      <span>Promo Discount (100% OFF)</span>
+                      <span>-${period === 'yearly' ? (39 * 12).toFixed(2) : '49.00'}</span>
+                    </div>
+                  ) : null}
+                  <div className="flex justify-between text-sm font-bold text-stone-900 pt-1 border-t border-dashed border-[var(--color-line)]">
+                    <span>Due Today</span>
+                    <span className="text-teal-800">{promoApplied ? '$0.00' : '$0.00 (Demo Zero-Cost)'}</span>
+                  </div>
+                </div>
+
+                <div className="pt-1 flex gap-2">
+                  <input
+                    type="text"
+                    className={`${inputClass} text-xs uppercase`}
+                    placeholder="Promo code (e.g. ZEROCOST)"
+                    value={promoCode}
+                    onChange={(e) => setPromoCode(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (promoCode.trim()) {
+                        setPromoApplied(true);
+                      }
+                    }}
+                    className={btnGhost + ' text-xs shrink-0'}
+                  >
+                    Apply
+                  </button>
+                </div>
+                {promoApplied ? (
+                  <p className="text-[11px] font-semibold text-emerald-700">✓ 100% Zero-cost discount code applied!</p>
+                ) : null}
+              </div>
+
+              {/* Right Column: Simulated Card Form */}
+              <div className="space-y-3">
+                <h4 className="font-bold text-xs uppercase tracking-wider text-stone-700">Payment Details (Simulated)</h4>
+                <Field label="Cardholder Name">
+                  <input
+                    type="text"
+                    className={inputClass}
+                    required
+                    placeholder="Founder Seed"
+                    value={paymentForm.nameOnCard}
+                    onChange={(e) => setPaymentForm((f) => ({ ...f, nameOnCard: e.target.value }))}
+                  />
+                </Field>
+
+                <Field label="Card Number">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      className={inputClass}
+                      required
+                      placeholder="4242 4242 4242 4242"
+                      value={paymentForm.cardNumber}
+                      onChange={(e) => setPaymentForm((f) => ({ ...f, cardNumber: e.target.value }))}
+                    />
+                    <span className="absolute right-3 top-2.5 text-xs font-bold text-stone-400">VISA / MC</span>
+                  </div>
+                </Field>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <Field label="Expiration">
+                    <input
+                      type="text"
+                      className={inputClass}
+                      required
+                      placeholder="MM / YY"
+                      value={paymentForm.expDate}
+                      onChange={(e) => setPaymentForm((f) => ({ ...f, expDate: e.target.value }))}
+                    />
+                  </Field>
+                  <Field label="CVC">
+                    <input
+                      type="text"
+                      className={inputClass}
+                      required
+                      placeholder="CVC"
+                      value={paymentForm.cvc}
+                      onChange={(e) => setPaymentForm((f) => ({ ...f, cvc: e.target.value }))}
+                    />
+                  </Field>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <Field label="Country">
+                    <input
+                      type="text"
+                      className={inputClass}
+                      placeholder="United States"
+                      value={paymentForm.country}
+                      onChange={(e) => setPaymentForm((f) => ({ ...f, country: e.target.value }))}
+                    />
+                  </Field>
+                  <Field label="Postal / ZIP">
+                    <input
+                      type="text"
+                      className={inputClass}
+                      placeholder="94107"
+                      value={paymentForm.zip}
+                      onChange={(e) => setPaymentForm((f) => ({ ...f, zip: e.target.value }))}
+                    />
+                  </Field>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-[var(--color-line)]">
+              <span className="text-[11px] text-stone-400">🔒 256-bit encrypted simulation</span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className={btnGhost}
+                  onClick={() => setShowPaymentModal(false)}
+                  disabled={paymentBusy}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className={btnPrimary} disabled={paymentBusy}>
+                  {paymentBusy ? 'Verifying Demo Card…' : 'Activate Pro Plan ($0.00)'}
+                </button>
+              </div>
+            </div>
+          </form>
+        )}
       </Modal>
     </div>
   );

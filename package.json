@@ -20,6 +20,8 @@
     "test:e2e:install": "playwright install chromium",
     "ci": "npm run lint && npm run format:check && npm run test && npm run build",
     "db:migrate": "node scripts/db-migrate.mjs",
+    "setup:env": "node scripts/setup-env.mjs",
+    "setup:api-key": "node scripts/setup-env.mjs",
     "start": "NODE_ENV=production tsx server/index.ts"
   },
   "dependencies": {

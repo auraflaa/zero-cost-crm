@@ -150,6 +150,44 @@ export function SettingsPage({ config, onSaved }: SettingsPageProps) {
           </p>
         </Field>
 
+        <div className="rounded-none border border-[var(--color-line)] bg-stone-50/70 p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold text-stone-900">AI Engine & API Keys</h3>
+            {config.aiConfigured ? (
+              <span className="inline-flex items-center gap-1.5 rounded-none bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-900 ring-1 ring-emerald-300">
+                <span className="h-2 w-2 rounded-full bg-emerald-600 animate-pulse" />
+                Live: <span className="uppercase">{config.aiProvider}</span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 rounded-none bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900 ring-1 ring-amber-300">
+                <span className="h-2 w-2 rounded-full bg-amber-500" />
+                Mock Mode (No API Key set)
+              </span>
+            )}
+          </div>
+          <p className="text-xs leading-relaxed text-stone-600">
+            Zero Cost CRM uses AI for <strong className="text-stone-900">Voice note STT</strong>, <strong className="text-stone-900">Business Card OCR</strong>, and <strong className="text-stone-900">0–10 Lead Scoring vs ICP</strong>.
+          </p>
+          <div className="space-y-2 rounded-none border border-[var(--color-line)] bg-white p-3 text-xs">
+            <p className="font-semibold text-stone-800">How to set up your API Key in seconds:</p>
+            <p className="text-stone-600">
+              Run the interactive setup helper in your terminal:
+            </p>
+            <pre className="rounded bg-stone-900 px-3 py-2 font-mono text-[11px] text-teal-300 overflow-x-auto">
+              npm run setup:env
+            </pre>
+            <p className="text-stone-600 pt-1">
+              Or add your key directly to <code className="font-mono text-[11px] text-stone-800">.env.local</code>:
+            </p>
+            <pre className="rounded bg-stone-900 px-3 py-2 font-mono text-[11px] text-teal-300 overflow-x-auto">
+              AI_API_KEY=gsk_your_groq_or_openai_api_key_here
+            </pre>
+            <p className="text-[11px] text-stone-500">
+              Keys starting with <code className="text-stone-800 font-mono">gsk_</code> (Groq), <code className="text-stone-800 font-mono">sk-</code> (OpenAI), or <code className="text-stone-800 font-mono">AIza</code> (Gemini) are auto-detected automatically.
+            </p>
+          </div>
+        </div>
+
         <p className="text-xs text-stone-500">Login email policy: {domainHint}</p>
 
         {error ? <p className="text-sm text-rose-700">{error}</p> : null}
