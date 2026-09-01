@@ -95,13 +95,15 @@ curl -s -X PATCH http://localhost:4000/api/settings \
 
 Requires AWS env vars. See `.env.example`.
 
-| Method   | Path                              | Description                            |
-| -------- | --------------------------------- | -------------------------------------- |
-| `POST`   | `/api/conversations/presign`      | Start upload                           |
-| `POST`   | `/api/conversations/:id/complete` | Finalize upload                        |
-| `GET`    | `/api/conversations`              | List (`contactId` / `companyId` query) |
-| `GET`    | `/api/conversations/:id/play`     | Presigned play URL                     |
-| `DELETE` | `/api/conversations/:id`          | Delete (admin)                         |
+| Method   | Path                                  | Description                                            |
+| -------- | ------------------------------------- | ------------------------------------------------------ |
+| `POST`   | `/api/conversations/presign`          | Start S3 upload                                        |
+| `POST`   | `/api/conversations/direct`           | Direct base64 recording upload (fallback when no S3)   |
+| `POST`   | `/api/conversations/:id/complete`     | Finalize S3 upload                                     |
+| `POST`   | `/api/conversations/:id/transcribe`   | Transcribe audio & run ICP analysis (Pro/Enterprise)   |
+| `GET`    | `/api/conversations`                  | List (`contactId` / `companyId` query)                 |
+| `GET`    | `/api/conversations/:id/play`         | Presigned play URL                                     |
+| `DELETE` | `/api/conversations/:id`              | Delete (admin)                                         |
 
 ## Activity (admin / founder)
 

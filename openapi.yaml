@@ -1931,6 +1931,43 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /api/conversations/direct:
+    post:
+      operationId: directConversationUpload
+      summary: Direct upload and store conversation recording with optional base64 data.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - contactId
+                - stageAtCall
+              properties:
+                contactId:
+                  type: string
+                  format: uuid
+                stageAtCall:
+                  type: string
+                notes:
+                  type: string
+                audioBase64:
+                  type: string
+                mimeType:
+                  type: string
+      responses:
+        "201":
+          description: Conversation created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
   /api/conversations/{id}/complete:
     parameters:
       - $ref: "#/components/parameters/id"
@@ -1954,6 +1991,58 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "409":
           $ref: "#/components/responses/DuplicateRequest"
+
+  /api/conversations/{id}/transcribe:
+    parameters:
+      - $ref: "#/components/parameters/id"
+    post:
+      operationId: transcribeConversation
+      summary: Transcribe call recording and generate ICP intelligence analysis
+      description: Gated behind Pro/Enterprise plan.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                audioBase64:
+                  type: string
+                mimeType:
+                  type: string
+      responses:
+        "200":
+          description: Transcription and ICP analysis generated.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - transcript
+                  - analysis
+                properties:
+                  transcript:
+                    type: string
+                  analysis:
+                    type: object
+                    properties:
+                      score:
+                        type: integer
+                      reasons:
+                        type: array
+                        items:
+                          type: string
+                      summary:
+                        type: string
+                      tier:
+                        type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          $ref: "#/components/responses/PaymentRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/conversations:
     get:
       operationId: listConversations

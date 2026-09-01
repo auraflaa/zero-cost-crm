@@ -142,7 +142,7 @@ function CompanyCard({
           {company.leadScore != null ? (
             <span
               className={`rounded-none px-2 py-0.5 text-[10px] font-semibold ${scoreColor(company.leadScore)}`}
-              title={company.leadScoreReasons.join(' · ')}
+              title={company.leadScoreReasons?.join(' · ') ?? ''}
               data-testid="lead-score"
             >
               {company.leadScore}
