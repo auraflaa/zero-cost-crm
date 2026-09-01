@@ -707,10 +707,10 @@ export function ImportLeads({ store }: ImportLeadsProps) {
           {single.company && single.prospectName ? (
             <div className="rounded-none bg-stone-50 px-3 py-2 text-xs">
               AI score preview:{' '}
-              <span className={`rounded-none px-2 py-0.5 text-xs font-medium ${scoreColor(scoreProspect({ company: single.company, prospectName: single.prospectName, jobTitle: single.jobTitle, email: single.email.toLowerCase(), phone: single.phone, location: single.location, employees: single.employees ? Number(single.employees.replace(/[^0-9]/g, '')) || null : null, industry: single.industry }, icp).score)}`}>
+              <span className={`inline-flex items-center whitespace-nowrap rounded-none px-2.5 py-0.5 text-xs font-semibold ${scoreColor(scoreProspect({ company: single.company, prospectName: single.prospectName, jobTitle: single.jobTitle, email: single.email.toLowerCase(), phone: single.phone, location: single.location, employees: single.employees ? Number(single.employees.replace(/[^0-9]/g, '')) || null : null, industry: single.industry }, icp).score)}`}>
                 {scoreLabel(scoreProspect({ company: single.company, prospectName: single.prospectName, jobTitle: single.jobTitle, email: single.email.toLowerCase(), phone: single.phone, location: single.location, employees: single.employees ? Number(single.employees.replace(/[^0-9]/g, '')) || null : null, industry: single.industry }, icp).score)}
               </span>
-              <span className="ml-2 text-stone-500">{scoreProspect({ company: single.company, prospectName: single.prospectName, jobTitle: single.jobTitle, email: single.email.toLowerCase(), phone: single.phone, location: single.location, employees: single.employees ? Number(single.employees.replace(/[^0-9]/g, '')) || null : null, industry: single.industry }, icp).reasons.join(' · ')}</span>
+              <span className="ml-2 text-stone-600 font-medium">({scoreProspect({ company: single.company, prospectName: single.prospectName, jobTitle: single.jobTitle, email: single.email.toLowerCase(), phone: single.phone, location: single.location, employees: single.employees ? Number(single.employees.replace(/[^0-9]/g, '')) || null : null, industry: single.industry }, icp).reasons.join(' · ')})</span>
             </div>
           ) : null}
           <button type="submit" className={btnPrimary} disabled={busy}>
@@ -836,9 +836,9 @@ export function ImportLeads({ store }: ImportLeadsProps) {
                 <div className="mt-4 space-y-2">
                   <h3 className="text-xs font-semibold tracking-wide text-stone-500 uppercase">AI scores (ICP)</h3>
                   {scoredBulk.slice(0, 8).map(({ row, score }, i) => (
-                    <div key={`${row.company}-${i}`} className="flex items-center justify-between text-xs">
+                    <div key={`${row.company}-${i}`} className="flex items-center justify-between text-xs gap-2">
                       <span className="truncate pr-2">{row.company} — {row.prospectName}</span>
-                      <span className={`rounded-none px-2 py-0.5 font-medium ${scoreColor(score.score)}`}>{scoreLabel(score.score)}</span>
+                      <span className={`inline-flex items-center whitespace-nowrap rounded-none px-2 py-0.5 text-xs font-semibold ${scoreColor(score.score)}`}>{scoreLabel(score.score)}</span>
                     </div>
                   ))}
                   {scoredBulk.length > 8 ? <p className="text-xs text-stone-400">+{scoredBulk.length - 8} more</p> : null}
@@ -927,7 +927,7 @@ export function ImportLeads({ store }: ImportLeadsProps) {
                       <p className="truncate text-xs text-stone-500">{row.jobTitle} · {row.email} · {row.industry}</p>
                       <p className="text-[11px] text-stone-400">{score.reasons.join(' · ')}</p>
                     </div>
-                    <span className={`shrink-0 rounded-none px-2 py-1 text-xs font-medium ${scoreColor(score.score)}`}>{scoreLabel(score.score)}</span>
+                    <span className={`shrink-0 inline-flex items-center whitespace-nowrap rounded-none px-2.5 py-1 text-xs font-semibold ${scoreColor(score.score)}`}>{scoreLabel(score.score)}</span>
                   </li>
                 ))}
               </ul>
@@ -1046,7 +1046,7 @@ export function ImportLeads({ store }: ImportLeadsProps) {
                       <p className="truncate text-xs text-stone-500">{row.jobTitle} · {row.email} · {row.industry}</p>
                       <p className="text-[11px] text-stone-400">{score.reasons.join(' · ')}</p>
                     </div>
-                    <span className={`shrink-0 rounded-none px-2 py-1 text-xs font-medium ${scoreColor(score.score)}`}>{scoreLabel(score.score)}</span>
+                    <span className={`shrink-0 inline-flex items-center whitespace-nowrap rounded-none px-2.5 py-1 text-xs font-semibold ${scoreColor(score.score)}`}>{scoreLabel(score.score)}</span>
                   </li>
                 ))}
               </ul>

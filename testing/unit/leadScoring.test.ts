@@ -66,12 +66,12 @@ describe('leadScoring', () => {
     expect(scoreLabel(null)).toBe('—');
 
     expect(scoreColor(9)).toContain('rose');
-    expect(scoreLabel(9)).toBe('Hot 9');
+    expect(scoreLabel(9)).toBe('9/10 · Hot');
 
     expect(scoreColor(6)).toContain('amber');
-    expect(scoreLabel(6)).toBe('Warm 6');
+    expect(scoreLabel(6)).toBe('6/10 · Warm');
 
     expect(scoreColor(3)).toContain('sky');
-    expect(scoreLabel(3)).toBe('Cold 3');
+    expect(scoreLabel(3)).toBe('3/10 · Cold');
   });
 });

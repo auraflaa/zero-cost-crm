@@ -84,15 +84,15 @@ export function scoreProspects(rows: ProspectRow[], icpDescription: string): Lea
 }
 
 export function scoreColor(score: number | null): string {
-  if (score == null) return 'bg-stone-100 text-stone-500';
-  if (score >= 8) return 'bg-rose-100 text-rose-800';
-  if (score >= 5) return 'bg-amber-100 text-amber-800';
-  return 'bg-sky-100 text-sky-800';
+  if (score == null) return 'bg-stone-100 text-stone-600 ring-1 ring-stone-200';
+  if (score >= 8) return 'bg-rose-50 text-rose-800 ring-1 ring-rose-300 font-semibold';
+  if (score >= 5) return 'bg-amber-50 text-amber-900 ring-1 ring-amber-300 font-semibold';
+  return 'bg-sky-50 text-sky-900 ring-1 ring-sky-300 font-semibold';
 }
 
 export function scoreLabel(score: number | null): string {
   if (score == null) return '—';
-  if (score >= 8) return `Hot ${score}`;
-  if (score >= 5) return `Warm ${score}`;
-  return `Cold ${score}`;
+  if (score >= 8) return `${score}/10 · Hot`;
+  if (score >= 5) return `${score}/10 · Warm`;
+  return `${score}/10 · Cold`;
 }

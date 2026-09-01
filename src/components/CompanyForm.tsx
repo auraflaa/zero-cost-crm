@@ -183,14 +183,14 @@ export function CompanyForm({
               </span>
               {currentCompany?.leadScore != null ? (
                 <span
-                  className={`rounded-none px-2 py-0.5 text-xs font-semibold ${scoreColor(
+                  className={`rounded-none px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap ${scoreColor(
                     currentCompany.leadScore
                   )}`}
                 >
                   {scoreLabel(currentCompany.leadScore)}
                 </span>
               ) : (
-                <span className="rounded-none bg-stone-200 px-2 py-0.5 text-xs font-medium text-stone-600">
+                <span className="rounded-none bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-500 ring-1 ring-stone-200 whitespace-nowrap">
                   Unscored
                 </span>
               )}
@@ -213,14 +213,17 @@ export function CompanyForm({
             <p className="mt-2 text-xs text-rose-600">{rescoreError}</p>
           ) : null}
           {currentCompany?.leadScoreReasons?.length ? (
-            <ul className="mt-2 space-y-0.5 text-xs text-stone-600">
-              {currentCompany.leadScoreReasons.map((reason, idx) => (
-                <li key={idx} className="flex items-start gap-1.5">
-                  <span className="text-teal-700 font-bold">·</span>
-                  <span>{reason}</span>
-                </li>
-              ))}
-            </ul>
+            <div className="mt-2.5 rounded border border-stone-200/80 bg-stone-50/50 p-2.5">
+              <p className="text-[11px] font-semibold tracking-wide text-stone-500 uppercase mb-1.5">Analysis Notes (vs ICP)</p>
+              <ul className="space-y-1 text-xs text-stone-700">
+                {currentCompany.leadScoreReasons.map((reason, idx) => (
+                  <li key={idx} className="flex items-start gap-1.5">
+                    <span className="text-teal-600 font-bold">·</span>
+                    <span>{reason}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           ) : null}
         </div>
       ) : null}

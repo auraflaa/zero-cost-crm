@@ -61,7 +61,7 @@ function ContactRow({
             </span>
           ) : null}
           {leadScore != null ? (
-            <span className={`rounded-none px-2 py-0.5 text-[10px] font-semibold ${scoreColor(leadScore)}`}>
+            <span className={`rounded-none px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${scoreColor(leadScore)}`}>
               {scoreLabel(leadScore)}
             </span>
           ) : null}
@@ -80,8 +80,7 @@ function ContactRow({
         </span>
         {leadScoring ? (
           <span className="rounded-none bg-stone-100 px-2 py-0.5 text-[11px] text-stone-600" title={leadScoring}>
-            {leadScoring.slice(0, 32)}
-            {leadScoring.length > 32 ? '…' : ''}
+            {leadScoring}
           </span>
         ) : null}
         {contact.phone ? <span className="text-xs text-stone-500">{contact.phone}</span> : null}
@@ -593,7 +592,7 @@ export function Contacts({ store, contactStatuses, stages }: ContactsProps) {
                   direction={sortDir}
                   onSort={onSort}
                 />
-                <th className="px-4 py-3 font-semibold uppercase">Lead scoring</th>
+                <th className="px-4 py-3 font-semibold uppercase min-w-[220px] whitespace-nowrap">Analysis note</th>
                 <th className="px-4 py-3 font-semibold uppercase">Phone</th>
                 <SortHeader
                   label="Follow-up"
@@ -650,20 +649,24 @@ export function Contacts({ store, contactStatuses, stages }: ContactsProps) {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-stone-600">{company?.stage ?? '—'}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 whitespace-nowrap">
                       {leadScore != null ? (
-                        <span className={`rounded-none px-2 py-0.5 text-[11px] font-semibold ${scoreColor(leadScore)}`}>
+                        <span
+                          className={`inline-flex items-center whitespace-nowrap rounded-none px-2.5 py-0.5 text-xs font-semibold ${scoreColor(
+                            leadScore
+                          )}`}
+                        >
                           {scoreLabel(leadScore)}
                         </span>
                       ) : (
                         <span className="text-xs text-stone-400">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-xs text-stone-500" title={leadScoring}>
+                    <td className="px-4 py-3 text-xs text-stone-600 min-w-[200px] max-w-[320px]" title={leadScoring}>
                       {leadScoring ? (
-                        <span className="line-clamp-2 max-w-[180px]">{leadScoring}</span>
+                        <span className="line-clamp-2 leading-relaxed">{leadScoring}</span>
                       ) : (
-                        '—'
+                        <span className="text-stone-400">—</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-stone-600">{t.phone || '—'}</td>
