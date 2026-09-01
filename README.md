@@ -1,294 +1,205 @@
 # Zero Cost CRM
 
-[![CI](https://github.com/ConvoBrains/zero-cost-crm/actions/workflows/ci.yml/badge.svg)](https://github.com/ConvoBrains/zero-cost-crm/actions/workflows/ci.yml)
+[![CI](https://github.com/auraflaa/zero-cost-crm/actions/workflows/ci.yml/badge.svg)](https://github.com/auraflaa/zero-cost-crm/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Good first issues](https://img.shields.io/github/labels/ConvoBrains/zero-cost-crm/good%20first%20issue)](https://github.com/ConvoBrains/zero-cost-crm/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
-[![GitHub stars](https://img.shields.io/github/stars/ConvoBrains/zero-cost-crm?style=social)](https://github.com/ConvoBrains/zero-cost-crm/stargazers)
+[![Good first issues](https://img.shields.io/github/labels/auraflaa/zero-cost-crm/good%20first%20issue)](https://github.com/auraflaa/zero-cost-crm/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+[![GitHub stars](https://img.shields.io/github/stars/auraflaa/zero-cost-crm?style=social)](https://github.com/auraflaa/zero-cost-crm/stargazers)
 [![first-timers-only](https://img.shields.io/badge/first--timers--only-friendly-blue.svg?style=flat-square)](https://www.firsttimersonly.com/)
-[![Open Source Helpers](https://www.codetriage.com/convobrains/zero-cost-crm/badges/users.svg)](https://www.codetriage.com/convobrains/zero-cost-crm)
 
-**Salesforce for teams that still live in Sheets** — self-hosted pipeline, contacts, follow-ups, SDR activity, and optional call recordings. MIT. One command to run.
-
-**We don't need Salesforce. We need to know which SDR is converting and why.**
-
-Most early-stage B2B teams hire their first SDR and manage them on Google Sheets,
-scattered call recordings, and founder intuition. We built the system we wished existed.
-
-[Run locally](#run-it-in-3-steps) · [Good first issues](https://github.com/ConvoBrains/zero-cost-crm/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) · [Fun issues](https://github.com/ConvoBrains/zero-cost-crm/issues?q=is%3Aissue+is%3Aopen+label%3Afun) · [Architecture](docs/ARCHITECTURE.md) · [API](docs/API.md) · [OpenAPI](openapi.yaml) · [Contributing](CONTRIBUTING.md) · [Discussions](https://github.com/ConvoBrains/zero-cost-crm/discussions) · [Security](SECURITY.md) · **[Book a demo](https://www.convobrains.com/contact)**
-
-> **New here?** `make setup && make dev` → open [localhost:5173](http://localhost:5173) → pick an unassigned [good first issue](https://github.com/ConvoBrains/zero-cost-crm/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22+no%3Aassignee) → comment *I'd like to take this*. We review fast and mentor first-timers. Rewards: see [#23](https://github.com/ConvoBrains/zero-cost-crm/issues/23).
-
-![Zero Cost CRM login](docs/images/login.png)
+**Salesforce for teams that still live in Sheets** — self-hosted sales pipeline, contacts, follow-up discipline, SDR activity tracking, multimodal AI lead ingestion, and sales call conversation intelligence. MIT licensed. One command to run.
 
 ---
 
-## Why this exists
+## ⚡ Quick Navigation
 
-We're a small team. Paying enterprise CRM prices for three reps is absurd.
-
-We needed:
-
-1. A **13-stage pipeline** we actually use
-2. Visibility into **who is working** (logins, active time, outcomes)
-3. **Follow-up discipline** — connected calls without a next step light up as alerts
-4. **Call recordings** attached to contacts, not buried in Drive folders
-5. Something a founder can stand up in **one command**
-
-This repo is **Zero Cost CRM**: pipeline operations for founder-led sales teams.
-
-[ConvoBrains](https://www.convobrains.com) is the **intelligence layer**: conversation analysis for call quality, pitch effectiveness, and objection handling.
-
-> Zero Cost CRM tells you **what** happened.
->
-> ConvoBrains tells you **why** it happened.
+- 📖 **[Detailed Setup Guide](SETUP.md)** — Complete step-by-step local, Docker, RDS, and production setup.
+- 🏗️ **[Architecture Overview](docs/ARCHITECTURE.md)** — High-level design, database ER sketches, and data flow.
+- 🔌 **[HTTP API Documentation](docs/API.md)** — Endpoints, auth headers, parameters, and payloads.
+- 📄 **[OpenAPI 3.1 Contract](openapi.yaml)** — Machine-readable API schema.
+- 🗄️ **[Database Schema](sql/schema.sql)** — Production-ready idempotent PostgreSQL schema.
+- 🤝 **[Contributing Guidelines](CONTRIBUTING.md)** — How to claim tickets, develop features, and submit PRs.
+- 🔒 **[Security Policy](SECURITY.md)** — Vulnerability disclosure guidelines.
+- 🌐 **[Book a Demo with Founders](https://www.convobrains.com/contact)** — Custom onboarding & conversation intelligence.
 
 ---
 
-## Run it in 3 steps
+## Why Zero Cost CRM?
 
-Requires [Docker](https://docs.docker.com/get-docker/) and Node.js 22+.
+Most early-stage B2B sales teams hire their first 1–5 SDRs and manage them across messy Google Sheets, chaotic WhatsApp threads, and founder intuition. Paying thousands per rep for Salesforce or HubSpot is overkill.
+
+**Zero Cost CRM gives you:**
+
+1. A **13-stage customizable sales pipeline** that reps actually use.
+2. **Follow-up discipline** — connected calls without next steps light up as manager alerts.
+3. **AI Lead Scoring (0–10)** against your company's custom Ideal Customer Profile (ICP) with actionable analysis notes.
+4. **Multimodal Lead Ingestion** — record a quick voice memo or snap a photo of a business card to automatically populate structured contacts and companies.
+5. **Call recording intelligence** attached directly to contacts and companies.
+6. **SDR activity visibility** — real logins, active time, dial counts, and outcome tracking.
+7. **Zero vendor lock-in** — 100% self-hosted PostgreSQL database under your control.
+
+> **Zero Cost CRM** tells you _what_ happened.  
+> **ConvoBrains Intelligence** tells you _why_ it happened.
+
+---
+
+## Features at a Glance
+
+| Feature                       | Description                                                                                           |
+| :---------------------------- | :---------------------------------------------------------------------------------------------------- |
+| 📊 **Interactive Pipeline**   | 13-stage drag-and-drop Kanban view with stage filters, summary metrics, and deal values.              |
+| 🤖 **AI ICP Lead Scoring**    | Automated 0–10 scoring with detailed rationale against your custom ICP description.                   |
+| 🎙️ **Voice AI Extraction**    | Record or upload audio voice notes to extract contact details, intent, and follow-ups automatically.  |
+| 📷 **Business Card OCR**      | Multimodal vision AI extracts names, emails, phones, titles, and companies from photos.               |
+| 👥 **Contact Management**     | Track champions, custom contact statuses, notes, LinkedIn profiles, and automated pipeline sync.      |
+| 📂 **Multi-format Importer**  | Bulk import leads from Excel (`.xlsx`), CSV, TSV, JSON, XML, HTML tables, and Markdown.               |
+| 📞 **Call Recordings & STT**  | Upload or record MP3/WAV/WebM audio; auto-transcribe with Whisper and analyze conversation sentiment. |
+| ⏱️ **SDR Activity Tracking**  | Logins, active/idle time, dial counts, outcome tracking, and daily target pacing.                     |
+| 🚨 **Manager Alerts**         | Immediate flags for reps missing 10:30 AM login, zero connected calls, or missing follow-ups.         |
+| ⚙️ **Instance Customization** | Customize branding, logo, pipeline stages, contact statuses, and discovery questions in the DB.       |
+| 💎 **Tiered Gating**          | Free Core CRM tier + Plus & Pro AI quota management with downgrade protection.                        |
+
+---
+
+## Quickstart in 3 Steps
+
+### Prerequisites
+
+- [Docker & Docker Compose](https://docs.docker.com/get-docker/)
+- [Node.js 22+](https://nodejs.org/)
+
+### 1. Clone & Setup
 
 ```bash
-git clone https://github.com/ConvoBrains/zero-cost-crm.git
+git clone https://github.com/auraflaa/zero-cost-crm.git
 cd zero-cost-crm
 make setup && make dev
 ```
 
-Open **[localhost:5173](http://localhost:5173)** and sign in:
+_(If you do not have `make`, run `cp testing/functional/.env.testing.example testing/functional/.env.testing && docker compose -f testing/functional/docker-compose.yml up -d && npm install && npm run test:api:prep && npm run dev`)_
+
+### 2. Open & Sign In
+
+Navigate to **[http://localhost:5173](http://localhost:5173)** in your browser:
 
 ```text
 Email:    founder.seed@convobrains.com
 Password: TestSeed123!
 ```
 
-This is a **demo seed account** with 3 days of sample SDR activity. It never touches production.
+> This demo seed database comes populated with 3 days of realistic SDR activity, companies, and contacts.
 
-Want conversation intelligence on your own calls? [Book 15 min with us](https://www.convobrains.com/contact).
-
-`make setup` installs dependencies, starts an isolated Postgres container, applies the schema, and loads companies, contacts, and three days of SDR activity.
+### 3. Reset Demo Data Anytime
 
 ```bash
-make reset-demo   # wipe & reseed local demo data
+make reset-demo
 ```
 
-### Environment
-
-```bash
-cp .env.example .env.local          # production-style local API
-cp testing/functional/.env.testing.example testing/functional/.env.testing  # demo path (make setup does this)
-```
-
-Important variables (see [`.env.example`](.env.example)):
-
-| Variable               | Purpose                                                          |
-| ---------------------- | ---------------------------------------------------------------- |
-| `DATABASE_URL`         | Postgres connection string                                       |
-| `JWT_SECRET`           | **Required** — long random secret                                |
-| `ALLOWED_EMAIL_DOMAIN` | Login allow-list (`convobrains.com`, comma list, or `*` for any) |
-| `CORS_ORIGINS`         | Allowed browser origins (comma-separated)                        |
-| `AWS_*`                | Optional — required only for call-recording uploads              |
+👉 _For advanced setup (bare metal PostgreSQL, remote RDS tunneling, AI keys, production deployment), see the complete **[SETUP.md](SETUP.md)**._
 
 ---
 
-## Is this for you?
+## The SDR Operating Model
 
-Use this if you:
+### Daily Rhythm
 
-- Have **1–10 SDRs** and no Salesforce admin
-- Still live in **Sheets / Notion / WhatsApp** for deal tracking
-- Care more about **daily activity + call discipline** than forecasting modules
-- Want **self-hosted** data and an open codebase
+1. **Morning Brief:** Open the Dashboard; review follow-ups due today and high-priority deals.
+2. **Pipeline Kanban:** Advance company cards only when real milestones are met.
+3. **Contact Logging:** Update contact status and champion flags after every dial.
+4. **Call Intelligence:** Attach call recordings or voice notes for automated STT transcription.
+5. **Manager Overview:** Check team activity pacing, active vs. idle hours, and coaching opportunities.
 
-Skip it if you need enterprise CPQ, multi-currency ERP integrations, or a full marketing automation suite.
-
----
-
-## What's in Zero Cost CRM
-
-| Capability            | What you get                                         |
-| --------------------- | ---------------------------------------------------- |
-| **Live dashboard**    | Follow-ups due, demos, active opps, won/lost         |
-| **13-stage pipeline** | Drag deals from lead → closed                        |
-| **AI Lead Scoring**   | Automated 0–10 scoring & ICP fit analysis            |
-| **Voice & Image OCR** | Audio transcription + business card camera capture   |
-| **Contacts**          | Champions, statuses, notes, LinkedIn, descriptions   |
-| **Multi-format Import**| Excel, CSV, TSV, JSON, XML, HTML, MD, voice & image |
-| **Call recordings**   | Upload, record, & AI transcribe per contact          |
-| **Subscription Tiers**| Plus (free/core), Pro, Enterprise feature gating     |
-| **SDR activity**      | Logins, active/idle time, outcomes, targets          |
-| **Manager alerts**    | No login by 10:30, zero connects, missing follow-ups |
-| **Roles**             | Founder / admin / SDR                                |
-| **Self-hosted**       | Your Postgres, your rules                            |
-| **Instance settings** | Brand name, ICP, stages, statuses in DB (Settings UI)|
-
-### Configuring your instance
-
-Keep the **code** generic. Put company-specific values in env or the database:
-
-| What                                                | Where                                                                             |
-| --------------------------------------------------- | --------------------------------------------------------------------------------- |
-| Postgres / JWT / email domain / S3 / CORS / AI keys | Server `.env` (`DATABASE_URL`, `JWT_SECRET`, `AI_API_KEY`, `AI_PROVIDER`, …)     |
-| Brand name, logo, pipeline stages, contact statuses, ICP description | DB `app_settings` — edit in **Settings** (founder/admin) or `PATCH /api/settings` |
-| Subscription plan tier (`plus`, `pro`, `enterprise`) | **Subscription** page in UI or `PATCH /api/subscription`                         |
-| Champion status → pipeline stage map (`championStatusToStage`) | **API / SQL only** today — `PATCH /api/settings` or [`sql/examples/convobrains-settings.sql`](sql/examples/convobrains-settings.sql) |
-| Discovery questions on the company form (`discoveryQuestions`) | **API / SQL only** today — same as above (not editable in the Settings UI yet) |
-| Optional first-boot brand / ICP | `BRAND_NAME`, `BRAND_TAGLINE`, `BRAND_LOGO_URL`, `ICP_DESCRIPTION` in env (seeded once) |
-
-Settings UI covers branding + stages + contact statuses. The champion sync map and discovery questions still go through the API (or the SQL example). See [`docs/API.md`](docs/API.md#settings-ui-vs-api-only) for a `PATCH` example.
-
----
-
-## The SDR operating model
-
-### Daily rhythm
-
-1. **Morning brief** — open the dashboard; clear follow-ups due today
-2. **Pipeline** — move cards only when the stage actually changed
-3. **Contacts** — update status after every dial
-4. **Record** — attach the call when it mattered
-5. **Activity** (managers) — check who worked, who coasted, who needs coaching
-
-### The 13-stage pipeline
+### The 13-Stage Sales Pipeline
 
 ```text
 Lead Added
-  → Discovery Call Done
-  → Follow-up
-  → Demo Scheduled
-  → Demo Delivered
-  → Commercial Proposal Shared
-  → POC Kickoff
-  → Client Data Received
-  → POC Delivered
-  → Final Negotiation
-  → Closed Won | Closed Lost | Not Interested
+  └── Discovery Call Done
+        └── Follow-up
+              └── Demo Scheduled
+                    └── Demo Delivered
+                          └── Commercial Proposal Shared
+                                └── POC Kickoff
+                                      └── Client Data Received
+                                            └── POC Delivered
+                                                  └── Final Negotiation
+                                                        ├── Closed Won
+                                                        ├── Closed Lost
+                                                        └── Not Interested
 ```
-
-### Targets (editable in Activity)
-
-| Metric          | Default |
-| --------------- | ------- |
-| Calls made      | 80      |
-| Follow-ups set  | 25      |
-| Demos scheduled | 4       |
 
 ---
 
-## Stack
+## Technology Stack
 
 ```text
-React 19 + TypeScript + Tailwind
-              ↓
-        Express 5 API
-              ↓
-          PostgreSQL 16
-              ↓
-     S3 (optional call recordings)
+┌────────────────────────────────────────────────────────┐
+│                   React 19 + TypeScript                │
+│       Vite · Tailwind CSS · @dnd-kit (Kanban DnD)      │
+└───────────────────────────┬────────────────────────────┘
+                            │ HTTP / JSON API
+┌───────────────────────────▼────────────────────────────┐
+│                  Express 5 API Server                  │
+│       TypeScript · tsx · JWT Auth · Helmet · CORS       │
+└───────────────────────────┬────────────────────────────┘
+                            │ PostgreSQL Wire Protocol
+┌───────────────────────────▼────────────────────────────┐
+│                 PostgreSQL 16 Database                 │
+│       Relational Schema · JSONB Fields · Triggers      │
+└───────────────────────────┬────────────────────────────┘
+                            │ S3 Presigned URLs (Optional)
+┌───────────────────────────▼────────────────────────────┐
+│               AWS S3 / Compatible Storage               │
+│               Audio Call Recordings & OCR              │
+└────────────────────────────────────────────────────────┘
 ```
 
-AWS is only required when testing uploads. Activity, pipeline, and import work without it.
+---
 
-Schema is applied from [`sql/schema.sql`](sql/schema.sql) (idempotent). See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+## Development & Test Commands
+
+| Command              | Description                                                       |
+| :------------------- | :---------------------------------------------------------------- |
+| `npm run dev`        | Launch Vite frontend (:5173) and Express API (:4000) concurrently |
+| `npm test`           | Run fast in-memory unit tests (Vitest)                            |
+| `npm run test:api`   | Run integration API tests against test PostgreSQL database        |
+| `npm run test:e2e`   | Run Playwright browser UI end-to-end tests                        |
+| `npm run build`      | Compile TypeScript and bundle production assets with Vite         |
+| `npm run lint`       | Run static code analysis with oxlint                              |
+| `npm run format`     | Auto-format source files with Prettier                            |
+| `npm run db:migrate` | Execute database migrations against configured `DATABASE_URL`     |
 
 ---
 
-## Commands
+## Instance Configuration
 
-| Command           | What it does                        |
-| ----------------- | ----------------------------------- |
-| `make setup`      | Install, provision, migrate, seed   |
-| `make dev`        | Web + API against the local demo DB |
-| `make reset-demo` | Rebuild demo fixtures               |
-| `make lint`       | Static checks                       |
-| `make build`      | Production build                    |
-| `make test`       | Unit tests                          |
-| `make test-api`   | API functional tests (DB prepared)  |
-| `make help`       | All targets                         |
+Company-specific settings are maintained in environment variables and the `app_settings` database table:
 
----
-
-## Import leads
-
-1. Open **Import Leads**
-2. Paste from Excel, Sheets, or CSV — or upload `.csv` / `.xlsx`
-3. Columns: `Company · Prospect Name · Job Title · Email · Phone · Location · Employees · Industry`
-4. Import — companies create/update; duplicate emails skip
-
-Samples in the UI use synthetic `@*.example` data only.
-
----
-
-## Deploy
-
-**Vercel + PostgreSQL**
-
-1. Import the repo in Vercel.
-2. Set `DATABASE_URL`, `JWT_SECRET`, `ALLOWED_EMAIL_DOMAIN`, and optional AWS / `CORS_ORIGINS`.
-3. `DATABASE_URL='postgresql://…' npm run db:migrate`
-4. Deploy and hit `/api/health`.
-
-**Docker / VPS**
-
-```bash
-# create .env with production secrets (never commit it)
-make docker-build
-make docker-up
-make health
-```
-
-Root `docker-compose.yml` runs the app container; Postgres is external (managed DB or your own). Local demo Postgres is provided by `testing/functional/docker-compose.yml` via `make setup`.
-
----
-
-## Security
-
-- Do **not** ship demo credentials or `testing/functional/.env.testing` to production.
-- Use a strong unique `JWT_SECRET`, verified TLS for Postgres, configured `CORS_ORIGINS`, and private object storage.
-- Report vulnerabilities privately — see [SECURITY.md](SECURITY.md).
-
-**If you ever committed real secrets to git:** rotate them immediately. History rewrite does not protect prior clones or forks.
-
----
-
-## Branding & trademarks
-
-MIT covers the **code**. The ConvoBrains name, logo, and marketing assets in `public/` remain ConvoBrains trademarks. Forks may keep attribution or replace branding; do not imply official endorsement.
-
-Google Fonts (DM Sans, Instrument Serif) are loaded from Google’s CDN under their respective OFL licenses. See [NOTICE](NOTICE).
+| Setting Area                 | Location       | Description                                                                                                                  |
+| :--------------------------- | :------------- | :--------------------------------------------------------------------------------------------------------------------------- |
+| **Secrets & Keys**           | `.env.local`   | `DATABASE_URL`, `JWT_SECRET`, `AI_API_KEY`, `AI_PROVIDER`, `AWS_*`                                                           |
+| **Branding & Logo**          | `app_settings` | Managed via the **Settings** page in the UI or `PATCH /api/settings`                                                         |
+| **Custom Stages & Statuses** | `app_settings` | Edit pipeline stages and contact statuses in the **Settings** UI                                                             |
+| **Subscription Plan Tier**   | `app_settings` | View and manage plan tiers (`free`, `plus`, `pro`, `enterprise`) in **Subscription**                                         |
+| **Discovery Questions**      | `app_settings` | Custom questionnaires configured via API or [`sql/examples/convobrains-settings.sql`](sql/examples/convobrains-settings.sql) |
 
 ---
 
 ## Contributing
 
-We welcome first-time PRs. Maintainers aim to reply within a day on claimed issues.
+We welcome contributions from the community! Check out our open issues:
 
-| Start here | Link |
-| --- | --- |
-| Beginner tickets | [good first issue](https://github.com/ConvoBrains/zero-cost-crm/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22+no%3Aassignee) (unassigned) |
-| Showcase / delightful work | [`fun` label](https://github.com/ConvoBrains/zero-cost-crm/issues?q=is%3Aissue+is%3Aopen+label%3Afun) |
-| How to claim + ship | [CONTRIBUTING.md](CONTRIBUTING.md) |
-| Rewards + onboarding | [#23 Start here](https://github.com/ConvoBrains/zero-cost-crm/issues/23) |
-| Ideas & questions | [Discussions](https://github.com/ConvoBrains/zero-cost-crm/discussions) |
-| Hall of fame | [CONTRIBUTORS.md](CONTRIBUTORS.md) |
-
-```bash
-make setup && make dev
-npm test
-```
-
-<a href="https://github.com/ConvoBrains/zero-cost-crm/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=ConvoBrains/zero-cost-crm" alt="Contributors to Zero Cost CRM" />
-</a>
+- 🏷️ **[Good First Issues](https://github.com/auraflaa/zero-cost-crm/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)** — Perfect for beginners.
+- 💡 **[Fun & Showcase Issues](https://github.com/auraflaa/zero-cost-crm/issues?q=is%3Aissue+is%3Aopen+label%3Afun)** — Creative enhancements.
+- 📖 Read **[CONTRIBUTING.md](CONTRIBUTING.md)** for our step-by-step PR workflow and contribution guidelines.
 
 ---
 
 ## License
 
-[MIT](LICENSE) © 2026 ConvoBrains
+Released under the **[MIT License](LICENSE)** © 2026 ConvoBrains.
 
 ---
 
-**Built by [ConvoBrains](https://www.convobrains.com)**  
-_Turn conversations into intelligence._
+**Built with ❤️ by [ConvoBrains](https://www.convobrains.com)**  
+_Turn sales conversations into predictable revenue._
 
 [Book a demo](https://www.convobrains.com/contact) · [support@convobrains.com](mailto:support@convobrains.com) · [LinkedIn](https://www.linkedin.com/company/convobrains/)
