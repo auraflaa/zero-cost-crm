@@ -118,6 +118,25 @@ Requires AWS env vars. See `.env.example`.
 
 Deep-link (SPA): `/?page=pipeline&companyId=<uuid>` opens Sales Pipeline with that company dialog.
 
+## Subscription & Plans
+
+| Method  | Path                | Description                                         |
+| ------- | ------------------- | --------------------------------------------------- |
+| `GET`   | `/api/subscription` | Current active tier (`plus`, `pro`, `enterprise`) and features |
+| `PATCH` | `/api/subscription` | Admin: change active subscription plan tier         |
+
+## AI Extraction & Lead Scoring (Pro / Enterprise)
+
+These endpoints require a Pro or Enterprise plan (returns `402 Payment Required` on Plus).
+
+| Method  | Path                        | Description                                                                 |
+| ------- | --------------------------- | --------------------------------------------------------------------------- |
+| `POST`  | `/api/import/voice/extract` | Transcribe voice recording (`audioBase64`) or extract from raw text transcript |
+| `POST`  | `/api/import/image/extract` | Extract business card details from image (`imageBase64`) + optional voice transcript |
+| `POST`  | `/api/ai/score`             | Batch score prospect rows against ICP (returns 0–10 score & reasons)        |
+| `POST`  | `/api/companies/:id/score`  | Rescore a single company record using AI against active ICP                 |
+
 ## Errors
 
-JSON body: `{ "error": "message" }` with appropriate HTTP status (`400`, `401`, `403`, `404`, `409`, `429`, `500`).
+JSON body: `{ "error": "message" }` with appropriate HTTP status (`400`, `401`, `402`, `403`, `404`, `409`, `429`, `500`).
+- `402`: Feature requires a higher subscription plan (`{ "error": "...", "code": "SUBSCRIPTION_REQUIRED" }`).

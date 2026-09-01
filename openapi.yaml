@@ -107,6 +107,12 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
+    PaymentRequired:
+      description: Subscription tier does not include this feature.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
   securitySchemes:
     bearerAuth:
       type: http
@@ -250,6 +256,33 @@ components:
           format: date
         notes:
           type: string
+        description:
+          type: string
+        leadScore:
+          type:
+            - integer
+            - "null"
+          minimum: 0
+          maximum: 10
+        leadScoreReasons:
+          type:
+            - array
+            - "null"
+          items:
+            type: string
+        leadScoredAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        leadScoreError:
+          type:
+            - string
+            - "null"
+        leadSource:
+          type: string
+        rawInputText:
+          type: string
         sourceLink:
           type: string
         companyWebsite:
@@ -307,6 +340,12 @@ components:
           format: date
         notes:
           type: string
+        description:
+          type: string
+        leadSource:
+          type: string
+        rawInputText:
+          type: string
         sourceLink:
           type: string
         companyWebsite:
@@ -358,6 +397,12 @@ components:
             - "null"
           format: date
         notes:
+          type: string
+        description:
+          type: string
+        leadSource:
+          type: string
+        rawInputText:
           type: string
         sourceLink:
           type: string
@@ -420,6 +465,10 @@ components:
             - string
             - "null"
           format: date
+        description:
+          type: string
+        rawInputText:
+          type: string
         notes:
           type: string
         createdAt:
@@ -460,6 +509,10 @@ components:
             - string
             - "null"
           format: date
+        description:
+          type: string
+        rawInputText:
+          type: string
         notes:
           type: string
     PatchContactRequest:
@@ -495,6 +548,10 @@ components:
             - string
             - "null"
           format: date
+        description:
+          type: string
+        rawInputText:
+          type: string
         notes:
           type: string
 
@@ -537,6 +594,8 @@ components:
         - contactStatuses
         - championStatusToStage
         - discoveryQuestions
+        - icpDescription
+        - subscriptionPlan
         - allowedEmailDomain
         - allowedEmailDomains
         - allowAnyEmailDomain
@@ -565,6 +624,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/DiscoveryQuestion"
+        icpDescription:
+          type: string
+        subscriptionPlan:
+          $ref: "#/components/schemas/SubscriptionPlan"
         allowedEmailDomain:
           type:
             - string
@@ -603,6 +666,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/DiscoveryQuestion"
+        icpDescription:
+          type: string
+        subscriptionPlan:
+          $ref: "#/components/schemas/SubscriptionPlan"
     SettingsResponse:
       type: object
       required:
@@ -613,6 +680,8 @@ components:
         - contactStatuses
         - championStatusToStage
         - discoveryQuestions
+        - icpDescription
+        - subscriptionPlan
         - updatedAt
       properties:
         brandName:
@@ -639,10 +708,159 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/DiscoveryQuestion"
+        icpDescription:
+          type: string
+        subscriptionPlan:
+          $ref: "#/components/schemas/SubscriptionPlan"
         updatedAt:
           type:
             - string
             - "null"
+
+    SubscriptionPlan:
+      type: string
+      enum:
+        - plus
+        - pro
+        - enterprise
+
+    SubscriptionResponse:
+      type: object
+      required:
+        - plan
+        - features
+      properties:
+        plan:
+          $ref: "#/components/schemas/SubscriptionPlan"
+        features:
+          type: object
+          additionalProperties:
+            type: boolean
+        updatedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+
+    SubscriptionPatch:
+      type: object
+      required:
+        - plan
+      properties:
+        plan:
+          $ref: "#/components/schemas/SubscriptionPlan"
+
+    VoiceExtractRequest:
+      type: object
+      properties:
+        audioBase64:
+          type: string
+        transcript:
+          type: string
+
+    ImageExtractRequest:
+      type: object
+      properties:
+        imageBase64:
+          type: string
+        mimeType:
+          type: string
+        transcript:
+          type: string
+        fallbackText:
+          type: string
+
+    AIExtractResponse:
+      type: object
+      required:
+        - rows
+        - errors
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProspectRow"
+        errors:
+          type: array
+          items:
+            type: string
+        transcript:
+          type: string
+
+    ProspectRow:
+      type: object
+      required:
+        - company
+        - prospectName
+      properties:
+        company:
+          type: string
+        prospectName:
+          type: string
+        jobTitle:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        location:
+          type: string
+        employees:
+          type:
+            - integer
+            - "null"
+        industry:
+          type: string
+        description:
+          type: string
+        rawInputText:
+          type: string
+        leadSource:
+          type: string
+
+    ScoreProspectsRequest:
+      type: object
+      required:
+        - rows
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProspectRow"
+        icpDescription:
+          type: string
+
+    ScoreProspectsResponse:
+      type: object
+      required:
+        - icp
+        - scores
+      properties:
+        icp:
+          type: string
+        scores:
+          type: array
+          items:
+            type: object
+            required:
+              - score
+              - reasons
+              - tier
+            properties:
+              score:
+                type: integer
+                minimum: 0
+                maximum: 10
+              reasons:
+                type: array
+                items:
+                  type: string
+              tier:
+                type: string
+                enum:
+                  - Hot
+                  - Warm
+                  - Cold
 
     LoginRequest:
       type: object
@@ -1978,6 +2196,139 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+
+  /api/subscription:
+    get:
+      operationId: getSubscriptionPlan
+      summary: Get active subscription plan and unlocked features
+      responses:
+        "200":
+          description: Active subscription plan retrieved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    patch:
+      operationId: updateSubscriptionPlan
+      summary: Change subscription plan tier
+      description: Requires admin role.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscriptionPatch"
+      responses:
+        "200":
+          description: Subscription plan updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/import/voice/extract:
+    post:
+      operationId: extractLeadsFromVoice
+      summary: Transcribe audio and extract structured prospect rows
+      description: Gated behind Pro/Enterprise plan.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VoiceExtractRequest"
+      responses:
+        "200":
+          description: Extracted prospect rows and optional transcript.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AIExtractResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          $ref: "#/components/responses/PaymentRequired"
+
+  /api/import/image/extract:
+    post:
+      operationId: extractLeadsFromImage
+      summary: Extract structured prospects from business card image or multimodal photo + voice
+      description: Gated behind Pro/Enterprise plan.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImageExtractRequest"
+      responses:
+        "200":
+          description: Extracted prospect rows.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AIExtractResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          $ref: "#/components/responses/PaymentRequired"
+
+  /api/ai/score:
+    post:
+      operationId: scoreProspects
+      summary: Score candidate prospect rows against ICP
+      description: Gated behind Pro/Enterprise plan.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScoreProspectsRequest"
+      responses:
+        "200":
+          description: Scored prospect results with reasons (0-10 scale).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScoreProspectsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          $ref: "#/components/responses/PaymentRequired"
+
+  /api/companies/{id}/score:
+    post:
+      operationId: scoreCompany
+      summary: Rescore a specific company record with AI against ICP
+      description: Gated behind Pro/Enterprise plan.
+      parameters:
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: Company scored and updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Company"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          $ref: "#/components/responses/PaymentRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
 
 

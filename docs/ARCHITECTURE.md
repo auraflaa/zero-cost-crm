@@ -25,13 +25,17 @@ In production (`NODE_ENV=production`), Express also serves the built SPA from `d
 
 | Path                      | Role                                                              |
 | ------------------------- | ----------------------------------------------------------------- |
-| `src/`                    | React UI (dashboard, pipeline, contacts, import, activity, users) |
-| `server/app.ts`           | HTTP routes, auth, CRM CRUD, import                               |
+| `src/`                    | React UI (dashboard, pipeline, contacts, import, activity, subscription, users) |
+| `server/app.ts`           | HTTP routes, auth, CRM CRUD, import, AI orchestration, background scoring worker |
+| `server/ai/extract.ts`    | Whisper STT audio transcription + multimodal vision card OCR      |
+| `server/ai/scoring.ts`    | AI Lead scoring (0–10 scale) against ICP description             |
+| `server/ai/transcribe.ts` | Call recording STT & ICP conversation analysis                    |
+| `server/subscription.ts`  | Subscription plan tiers (`plus`, `pro`, `enterprise`) & gating    |
 | `server/activity*.ts`     | SDR sessions, events, manager overview                            |
 | `server/conversations.ts` | Recording upload/presign/play                                     |
 | `server/config.ts`        | Environment validation                                            |
-| `sql/schema.sql`          | Idempotent Postgres schema (+ `app_settings`)                     |
-| `server/settings.ts`      | Load/update instance branding & lists                             |
+| `sql/schema.sql`          | Idempotent Postgres schema (`app_settings`, `lead_scores`, `extraction_jobs`) |
+| `server/settings.ts`      | Load/update instance branding, ICP, & lists                       |
 | `testing/unit/`           | Unit tests                                                        |
 | `testing/functional/`     | Test DB + API tests                                               |
 | `testing/e2e/`            | UI e2e (Playwright)                                               |
@@ -44,8 +48,11 @@ users 1──* user_sessions
 users 1──* activity_events
 companies 1──* contacts
 companies 1──* conversations
+companies 1──* lead_scores
 contacts 1──* conversations
+extraction_jobs (audit log for voice/image ingestion)
 sdr_daily_targets (singleton-ish row)
+app_settings (singleton row: branding, stages, statuses, ICP, subscription)
 ```
 
 Source of truth: [`sql/schema.sql`](../sql/schema.sql).

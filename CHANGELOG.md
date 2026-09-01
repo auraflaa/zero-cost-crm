@@ -9,17 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Instance `app_settings` table for branding, pipeline stages, and contact statuses (DB-backed; keeps the product generic across deploys)
-- `GET /api/config` now returns `brandName`, `brandTagline`, `logoUrl`, `stages`, `contactStatuses`, `championStatusToStage`
-- `PATCH /api/settings` (admin/founder) to update instance settings
-- Settings page in the UI for founders/admins
-- Optional env bootstrap: `BRAND_NAME`, `BRAND_TAGLINE`, `BRAND_LOGO_URL`
+- **AI Voice-to-Lead Ingestion**: Microphone recording and audio upload transcription via Whisper (`whisper-large-v3-turbo`) with structured prospect JSON extraction (`POST /api/import/voice/extract`).
+- **AI Image & Business Card OCR**: Multimodal vision extraction (`POST /api/import/image/extract`) supporting business card photo upload, direct mobile camera capture (`capture="environment"`), and combined photo + voice notes.
+- **Multi-Format Prospect Ingestion**: Auto-delimiter parser supporting CSV, TSV, Excel (`.xlsx`, `.xls`), JSON, HTML, XML, Markdown tables, and raw text.
+- **AI ICP Lead Scoring (0–10 Scale)**: Automated lead scoring against configurable ICP description in Settings (`POST /api/ai/score` & `POST /api/companies/:id/score`), background scoring daemon for unscored companies, score badges and reasons in Contacts, Pipeline Kanban, and Company modal with a "Rescore with AI" action.
+- **Call Recording Intelligence**: Whisper speech-to-text and automated ICP transcript analysis for SDR calls.
+- **Subscription Management & Feature Gating**: Dedicated Subscription page (`plus`, `pro`, `enterprise` tiers), plan switcher, feature comparison, and `402 Payment Required` middleware gating AI features behind Pro/Enterprise.
+- **Contact Descriptions**: Added `description` and `raw_input_text` fields across database, API, and ContactForm.
+- **API Spec & Docs**: Full OpenAPI 3.1 synchronization (`openapi.yaml`) and updated API documentation (`docs/API.md`).
+- **Test Coverage**: Added unit tests for lead scoring and subscriptions, along with functional API test suites for subscription endpoints and scoring.
 
 ### Changed
 
-- Company `stage` and contact `contact_status` SQL CHECK constraints removed; validation uses instance settings
-- Default `ALLOWED_EMAIL_DOMAIN` is `*` (set your org domain in env for locked installs)
-- Auth localStorage keys renamed to `zcrm-*` (legacy `convobrains-crm-*` keys still read)
+- Instance `app_settings` table for branding, pipeline stages, contact statuses, ICP description, and subscription plan.
+- `GET /api/config` now returns `brandName`, `brandTagline`, `logoUrl`, `stages`, `contactStatuses`, `championStatusToStage`, `discoveryQuestions`, `icpDescription`, and `subscriptionPlan`.
+- `PATCH /api/settings` (admin/founder) to update instance settings including ICP description.
+- Settings page in the UI for founders/admins with ICP configuration.
+- Replaced native browser confirmation alerts with styled modal dialogs.
 
 ## [1.1.0] — 2026-07-17
 

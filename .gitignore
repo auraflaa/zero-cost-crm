@@ -19,8 +19,13 @@ dist-ssr
 testing/functional/.env.testing
 testing/.env.testing
 
-# Test artifacts
+# Test artifacts and media
 *.mp3
+*.webm
+*.wav
+*.m4a
+*.ogg
+*.flac
 coverage
 uploads
 tmp
@@ -29,6 +34,17 @@ playwright-report
 blob-report
 *.pem
 *.key
+
+# Python & scratch files
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+scratch_*.py
+scratch_*.txt
+dump_*.py
+scratch/
 
 # AI and editor metadata
 .agent/
@@ -50,3 +66,6 @@ CLAUDE.md
 *.sln
 *.sw?
 .gitnexus
+
+
+preparing-codebase-configs-for-testing.json

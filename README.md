@@ -109,14 +109,17 @@ Skip it if you need enterprise CPQ, multi-currency ERP integrations, or a full m
 | --------------------- | ---------------------------------------------------- |
 | **Live dashboard**    | Follow-ups due, demos, active opps, won/lost         |
 | **13-stage pipeline** | Drag deals from lead → closed                        |
-| **Contacts**          | Champions, statuses, notes, LinkedIn                 |
-| **Paste import**      | Excel / Sheets / CSV → deduped companies + contacts  |
-| **Call recordings**   | Upload & play audio per contact (S3 optional)        |
+| **AI Lead Scoring**   | Automated 0–10 scoring & ICP fit analysis            |
+| **Voice & Image OCR** | Audio transcription + business card camera capture   |
+| **Contacts**          | Champions, statuses, notes, LinkedIn, descriptions   |
+| **Multi-format Import**| Excel, CSV, TSV, JSON, XML, HTML, MD, voice & image |
+| **Call recordings**   | Upload, record, & AI transcribe per contact          |
+| **Subscription Tiers**| Plus (free/core), Pro, Enterprise feature gating     |
 | **SDR activity**      | Logins, active/idle time, outcomes, targets          |
 | **Manager alerts**    | No login by 10:30, zero connects, missing follow-ups |
 | **Roles**             | Founder / admin / SDR                                |
 | **Self-hosted**       | Your Postgres, your rules                            |
-| **Instance settings** | Brand name, stages, statuses in DB (Settings UI)     |
+| **Instance settings** | Brand name, ICP, stages, statuses in DB (Settings UI)|
 
 ### Configuring your instance
 
@@ -124,11 +127,12 @@ Keep the **code** generic. Put company-specific values in env or the database:
 
 | What                                                | Where                                                                             |
 | --------------------------------------------------- | --------------------------------------------------------------------------------- |
-| Postgres / JWT / email domain / S3 / CORS           | Server `.env` (`DATABASE_URL`, `JWT_SECRET`, `ALLOWED_EMAIL_DOMAIN`, …)           |
-| Brand name, logo, pipeline stages, contact statuses | DB `app_settings` — edit in **Settings** (founder/admin) or `PATCH /api/settings` |
+| Postgres / JWT / email domain / S3 / CORS / AI keys | Server `.env` (`DATABASE_URL`, `JWT_SECRET`, `AI_API_KEY`, `AI_PROVIDER`, …)     |
+| Brand name, logo, pipeline stages, contact statuses, ICP description | DB `app_settings` — edit in **Settings** (founder/admin) or `PATCH /api/settings` |
+| Subscription plan tier (`plus`, `pro`, `enterprise`) | **Subscription** page in UI or `PATCH /api/subscription`                         |
 | Champion status → pipeline stage map (`championStatusToStage`) | **API / SQL only** today — `PATCH /api/settings` or [`sql/examples/convobrains-settings.sql`](sql/examples/convobrains-settings.sql) |
 | Discovery questions on the company form (`discoveryQuestions`) | **API / SQL only** today — same as above (not editable in the Settings UI yet) |
-| Optional first-boot brand | `BRAND_NAME`, `BRAND_TAGLINE`, `BRAND_LOGO_URL` in env (seeded once) |
+| Optional first-boot brand / ICP | `BRAND_NAME`, `BRAND_TAGLINE`, `BRAND_LOGO_URL`, `ICP_DESCRIPTION` in env (seeded once) |
 
 Settings UI covers branding + stages + contact statuses. The champion sync map and discovery questions still go through the API (or the SQL example). See [`docs/API.md`](docs/API.md#settings-ui-vs-api-only) for a `PATCH` example.
 
