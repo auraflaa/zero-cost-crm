@@ -63,10 +63,10 @@ const PLANS: Plan[] = [
     tagline: 'For high-velocity SDR teams who need high limits & call analysis.',
     priceMonthly: 49,
     priceYearly: 39,
-    cta: 'Current Plan Active',
+    cta: 'Active Plan Details',
     ctaVariant: 'primary',
     highlight: true,
-    badge: 'Active plan',
+    badge: 'Active Plan',
     features: [
       'Up to 10 users, unlimited contacts',
       'Everything in Plus',
@@ -349,7 +349,7 @@ export function SubscriptionPage() {
                 onClick={() => handlePlanClick(plan)}
                 className={(isCurrent ? btnPrimary : plan.id === 'enterprise' ? btnPrimary + ' bg-stone-900 hover:bg-black' : btnGhost) + ' mt-5 w-full'}
               >
-                {isCurrent ? 'Current Plan Active' : plan.cta}
+                {isCurrent ? 'Active Plan Details' : plan.cta}
               </button>
               <p className="mt-2 text-center text-[11px] text-stone-400">{plan.id === 'enterprise' ? 'Custom SLA & deployment' : isCurrent ? 'Active on your account' : 'View plan overview'}</p>
               <ul className="mt-6 space-y-2">

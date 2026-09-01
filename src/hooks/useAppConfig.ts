@@ -21,7 +21,7 @@ const FALLBACK: AppConfig = {
   championStatusToStage: { ...DEFAULT_CHAMPION_STATUS_TO_STAGE },
   discoveryQuestions: [...DEFAULT_DISCOVERY_QUESTIONS],
   icpDescription: DEFAULT_ICP_DESCRIPTION,
-  subscriptionPlan: 'plus',
+  subscriptionPlan: 'pro',
   allowedEmailDomain: null,
   allowedEmailDomains: ['*'],
   allowAnyEmailDomain: true,
@@ -49,7 +49,7 @@ export function useAppConfig() {
           ? cfg.discoveryQuestions
           : [...DEFAULT_DISCOVERY_QUESTIONS],
         icpDescription: typeof cfg.icpDescription === 'string' ? cfg.icpDescription : DEFAULT_ICP_DESCRIPTION,
-        subscriptionPlan: cfg.subscriptionPlan || 'plus',
+        subscriptionPlan: cfg.subscriptionPlan || 'pro',
         allowedEmailDomain: cfg.allowedEmailDomain,
         allowedEmailDomains: cfg.allowedEmailDomains ?? ['*'],
         allowAnyEmailDomain: !!cfg.allowAnyEmailDomain,

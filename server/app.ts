@@ -1346,6 +1346,9 @@ app.post('/api/import/prospects', requireAuth, async (req, res) => {
     return;
   }
 
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const safeUserId = (req.user?.sub && UUID_REGEX.test(req.user.sub)) ? req.user.sub : null;
+
   const client = await pool.connect();
   const result = {
     companiesCreated: 0,
@@ -1369,7 +1372,8 @@ app.post('/api/import/prospects', requireAuth, async (req, res) => {
     const touchedCompanies = new Set<string>();
 
     for (const row of rows) {
-      const key = row.company.toLowerCase();
+      if (!row || !row.company || !row.prospectName) continue;
+      const key = row.company.toLowerCase().trim();
       let company = companyByName.get(key);
 
       if (!company) {
@@ -1382,11 +1386,11 @@ app.post('/api/import/prospects', requireAuth, async (req, res) => {
           RETURNING *
           `,
           [
-            row.company,
-            mapIndustry(row.industry),
+            row.company.trim(),
+            mapIndustry(row.industry ?? ''),
             row.location ?? '',
-            row.employees,
-            req.user!.sub,
+            row.employees ?? null,
+            safeUserId,
             todayIso(),
             `Imported ${todayIso()}`,
             row.description ?? '',
@@ -1398,44 +1402,6 @@ app.post('/api/import/prospects', requireAuth, async (req, res) => {
         company.assigned_to_name = req.user!.name;
         companyByName.set(key, company);
         result.companiesCreated += 1;
-
-        // Immediate AI scoring if Pro/Enterprise and ICP configured
-        const _planForScoring = await getCurrentPlan();
-        if (hasFeature(_planForScoring, 'lead_scoring')) {
-          try {
-            const settings = await getAppSettings();
-            const icp = settings.icpDescription ?? '';
-            if (icp.trim()) {
-              const prospectLike = {
-                company: row.company,
-                prospectName: row.prospectName,
-                jobTitle: row.jobTitle ?? '',
-                email: row.email ?? '',
-                phone: row.phone ?? '',
-                location: row.location ?? '',
-                employees: row.employees ?? null,
-                industry: row.industry ?? '',
-                description: row.description ?? '',
-                rawInputText: row.rawInputText ?? '',
-              };
-              const scored = scoreProspectLocal(prospectLike, icp);
-              await client.query(
-                `UPDATE companies SET lead_score=$1, lead_score_reasons=$2::jsonb, lead_scored_at=now(), description=COALESCE(NULLIF($3,''),description) WHERE id=$4`,
-                [scored.score, JSON.stringify(scored.reasons), row.description ?? '', company.id]
-              );
-              await client.query(
-                `INSERT INTO lead_scores (company_id, score, reasons, icp_snapshot, model) VALUES ($1,$2,$3::jsonb,$4,$5)`,
-                [company.id, scored.score, JSON.stringify(scored.reasons), icp, config.ai.provider]
-              );
-              await client.query(
-                `INSERT INTO extraction_jobs (user_id, source_type, status, transcript, extracted_rows) VALUES ($1,$2,'imported',$3,$4::jsonb)`,
-                [req.user!.sub, (row.leadSource === 'voice' || row.leadSource === 'image') ? row.leadSource : 'bulk', row.rawInputText ?? '', JSON.stringify([row])]
-              );
-            }
-          } catch {
-            // scoring failure does not block import
-          }
-        }
       } else if (!touchedCompanies.has(String(company.id))) {
         const patch: string[] = [];
         const vals: unknown[] = [];
@@ -1472,7 +1438,6 @@ app.post('/api/import/prospects', requireAuth, async (req, res) => {
           result.companiesUpdated += 1;
         }
         touchedCompanies.add(String(company.id));
-        // If company was rescored target, ensure unscored background will pick it up lazily if ICP now exists
       } else {
         company = companyByName.get(key)!;
       }

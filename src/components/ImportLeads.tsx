@@ -1,36 +1,39 @@
-import { useMemo, useState, type ChangeEvent, type FormEvent, useRef, useEffect } from 'react';
-import ExcelJS from 'exceljs';
+import { useState, useMemo, useRef, useEffect, type ChangeEvent, type FormEvent } from 'react';
+import type { ImportResult, ProspectRow } from '../types';
 import type { CrmStore } from '../hooks/useCrmStore';
-import type { ProspectRow } from '../types';
 import {
-  PROSPECT_TEMPLATE_CSV,
   parseProspectAuto,
-  parseProspectMatrix,
   parseProspectPaste,
   previewByCompany,
 } from '../lib/importProspects';
-import { Field, btnPrimary, btnGhost, inputClass } from './ui';
+import { Field, inputClass, btnPrimary, btnGhost } from './ui';
 import { useAppConfig } from '../hooks/useAppConfig';
 import { useSubscription } from '../hooks/useSubscription';
 import { scoreProspect, scoreColor, scoreLabel } from '../lib/leadScoring';
 import { api } from '../lib/api';
+import ExcelJS from 'exceljs';
 
 interface ImportLeadsProps {
   store: CrmStore;
 }
 
-const EXAMPLE = `Company\tProspect Name\tJob Title\tEmail\tPhone\tLocation\tEmployees\tIndustry
-Acme Bio Labs\tAlex Example\tHead of Operations\talex@acme-bio.example\t+1 555 010 1001\tAustin, USA\t180\tResearchBiotechnology
-Northwind Health\tJordan Sample\tCo-Founder & CEO\tjordan@northwind-health.example\t+1 555 010 1002\tChicago, USA\t230\tHospital & Health Care`;
-
 type Mode = 'single' | 'bulk' | 'voice' | 'image';
 
-type ImportResult = {
-  message: string;
-  ok: boolean;
-};
+interface ManualLeadEntry {
+  id: string;
+  company: string;
+  prospectName: string;
+  jobTitle: string;
+  email: string;
+  phone: string;
+  location: string;
+  employees: string;
+  industry: string;
+  description: string;
+}
 
-const emptySingle = {
+const createBlankLead = (id?: string): ManualLeadEntry => ({
+  id: id || Math.random().toString(36).substring(2, 9),
   company: '',
   prospectName: '',
   jobTitle: '',
@@ -39,14 +42,10 @@ const emptySingle = {
   location: '',
   employees: '',
   industry: '',
-};
+  description: '',
+});
 
-function formatResult(result: {
-  companiesCreated: number;
-  companiesUpdated: number;
-  contactsCreated: number;
-  contactsSkipped: number;
-}) {
+function formatResult(result: ImportResult): string {
   return `Done. ${result.companiesCreated} new companies, ${result.companiesUpdated} existing companies updated, ${result.contactsCreated} contacts added, ${result.contactsSkipped} duplicates skipped.`;
 }
 
@@ -58,9 +57,11 @@ export function ImportLeads({ store }: ImportLeadsProps) {
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileRows, setFileRows] = useState<ProspectRow[]>([]);
   const [fileErrors, setFileErrors] = useState<string[]>([]);
-  const [single, setSingle] = useState(emptySingle);
-  const [lastResult, setLastResult] = useState<ImportResult | null>(null);
+  const [lastResult, setLastResult] = useState<{ message: string; ok: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Multi-lead manual entry list state
+  const [manualLeads, setManualLeads] = useState<ManualLeadEntry[]>([createBlankLead('1')]);
 
   // Voice state — reuses prospect parsing with auto-transcription
   const [voiceTranscript, setVoiceTranscript] = useState('');
@@ -108,6 +109,71 @@ export function ImportLeads({ store }: ImportLeadsProps) {
     };
   }, [imagePreviewUrl]);
 
+  const updateManualLead = (id: string, field: keyof ManualLeadEntry, value: string) => {
+    setManualLeads((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
+    );
+  };
+
+  const addManualLead = () => {
+    setManualLeads((prev) => [...prev, createBlankLead()]);
+  };
+
+  const removeManualLead = (id: string) => {
+    setManualLeads((prev) => {
+      if (prev.length <= 1) return [createBlankLead('1')];
+      return prev.filter((item) => item.id !== id);
+    });
+  };
+
+  const clearManualLeads = () => {
+    setManualLeads([createBlankLead('1')]);
+    setLastResult(null);
+  };
+
+  const runManualImport = async (e: FormEvent) => {
+    e.preventDefault();
+    const validRows: ProspectRow[] = manualLeads
+      .filter((l) => l.company.trim() && l.prospectName.trim())
+      .map((l) => ({
+        company: l.company.trim(),
+        prospectName: l.prospectName.trim(),
+        jobTitle: l.jobTitle.trim(),
+        email: l.email.trim().toLowerCase(),
+        phone: l.phone.trim(),
+        location: l.location.trim(),
+        employees: l.employees ? Number(l.employees.replace(/[^0-9]/g, '')) || null : null,
+        industry: l.industry.trim(),
+        description: l.description.trim(),
+      }));
+
+    if (validRows.length === 0) {
+      setLastResult({
+        message: 'Please fill in at least Company and Prospect Name for at least one lead.',
+        ok: false,
+      });
+      return;
+    }
+
+    setBusy(true);
+    setLastResult(null);
+    try {
+      const result = await store.importProspects(validRows);
+      setLastResult({
+        message: `Imported ${validRows.length} lead${validRows.length > 1 ? 's' : ''}: ${formatResult(result)}`,
+        ok: true,
+      });
+      setManualLeads([createBlankLead('1')]);
+    } catch (err) {
+      setLastResult({
+        message: err instanceof Error ? err.message : 'Import failed',
+        ok: false,
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const runBulkImport = async () => {
     if (bulkRows.length === 0) {
       setLastResult({
@@ -134,37 +200,6 @@ export function ImportLeads({ store }: ImportLeadsProps) {
     }
   };
 
-  const runSingleImport = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!single.company.trim() || !single.prospectName.trim()) return;
-    setBusy(true);
-    setLastResult(null);
-    try {
-      const row: ProspectRow = {
-        company: single.company.trim(),
-        prospectName: single.prospectName.trim(),
-        jobTitle: single.jobTitle.trim(),
-        email: single.email.trim().toLowerCase(),
-        phone: single.phone.trim(),
-        location: single.location.trim(),
-        employees: single.employees
-          ? Number(single.employees.replace(/[^0-9]/g, '')) || null
-          : null,
-        industry: single.industry.trim(),
-      };
-      const result = await store.importProspects([row]);
-      setLastResult({ message: formatResult(result), ok: true });
-      setSingle(emptySingle);
-    } catch (err) {
-      setLastResult({
-        message: err instanceof Error ? err.message : 'Import failed',
-        ok: false,
-      });
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const onFile = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -179,61 +214,62 @@ export function ImportLeads({ store }: ImportLeadsProps) {
       if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
         const wb = new ExcelJS.Workbook();
         await wb.xlsx.load(buf);
-        const sheet = wb.worksheets[0];
-        if (!sheet) {
-          setFileRows([]);
-          setFileErrors(['No sheet found in file.']);
-          setFileName(file.name);
+        const ws = wb.worksheets[0];
+        if (!ws) {
+          setFileErrors(['Workbook has no sheets']);
           return;
         }
         const matrix: unknown[][] = [];
-        sheet.eachRow({ includeEmpty: false }, (row) => {
-          const values = row.values;
-          const cells = Array.isArray(values) ? values.slice(1).map((v) => (v == null ? '' : String(v))) : [];
-          matrix.push(cells);
+        ws.eachRow({ includeEmpty: false }, (r) => {
+          const rowVals: unknown[] = [];
+          r.eachCell({ includeEmpty: true }, (c) => {
+            const v = c.value;
+            if (v && typeof v === 'object') {
+              if ('text' in v && typeof (v as { text: unknown }).text === 'string') {
+                rowVals.push((v as { text: string }).text);
+              } else if ('result' in v) {
+                rowVals.push(String((v as { result: unknown }).result ?? ''));
+              } else {
+                rowVals.push(String(v));
+              }
+            } else {
+              rowVals.push(v == null ? '' : String(v));
+            }
+          });
+          if (rowVals.some((x) => String(x).trim().length > 0)) {
+            matrix.push(rowVals);
+          }
         });
+        const { parseProspectMatrix } = await import('../lib/importProspects');
         const parsed = parseProspectMatrix(matrix);
-        setFileRows(parsed.rows);
-        setFileErrors(parsed.errors);
         setFileName(file.name);
+        setFileRows(parsed.rows);
+        setFileErrors(cleanErrors(parsed.errors));
         return;
       }
 
-      // Text-based: csv, txt, html, xml, json, md — auto-detect via parseProspectAuto
-      const text = new TextDecoder('utf-8').decode(buf);
-      // Quick check if it's JSON/HTML/XML/MD by content or extension
-      const lowerText = text.trim().toLowerCase();
-      const isJson = name.endsWith('.json') || (lowerText.startsWith('{') || lowerText.startsWith('['));
-      const isHtml = name.endsWith('.html') || name.endsWith('.htm') || lowerText.includes('<table') || lowerText.includes('<html');
-      const isXml = name.endsWith('.xml') || lowerText.startsWith('<?xml') || lowerText.startsWith('<rows') || lowerText.startsWith('<leads');
-      const isMd = name.endsWith('.md') || (text.includes('|') && text.includes('---'));
-
-      if (isJson || isHtml || isXml || isMd || name.endsWith('.csv') || name.endsWith('.tsv') || name.endsWith('.txt') || name.endsWith('.md') || name.endsWith('.html') || name.endsWith('.xml') || name.endsWith('.json')) {
-        const parsed = parseProspectAuto(text, file.name);
-        setFileRows(parsed.rows);
-        setFileErrors(parsed.errors);
-        setFileName(file.name);
-        return;
-      }
-
-      // Fallback: try as text with auto delimiter
-      const parsed = parseProspectAuto(text, file.name);
+      // Plain text formats: CSV, TSV, JSON, HTML, XML, Markdown
+      const t = new TextDecoder('utf-8').decode(buf);
+      const parsed = parseProspectAuto(t, file.name);
+      setFileName(file.name);
       setFileRows(parsed.rows);
-      setFileErrors(parsed.errors);
-      setFileName(file.name);
-    } catch {
-      setFileRows([]);
-      setFileErrors(['Could not read file. Supported: csv, excel, txt, html, xml, json, md.']);
-      setFileName(file.name);
+      setFileErrors(cleanErrors(parsed.errors));
+    } catch (err) {
+      setFileErrors([err instanceof Error ? err.message : 'Could not read file']);
     }
   };
 
   const downloadTemplate = () => {
-    const blob = new Blob([PROSPECT_TEMPLATE_CSV], { type: 'text/csv;charset=utf-8' });
+    const header = 'Company\tProspect Name\tJob Title\tEmail\tPhone\tLocation\tEmployees\tIndustry\n';
+    const sample =
+      'Acme Corp\tAlex Mercer\tVP of Sales\talex@acme.com\t+1 (555) 019-2834\tAustin, TX\t150\tSaaS\n' +
+      'BioGen Labs\tSarah Connor\tHead of Ops\tsarah@biogen.org\t+1 (555) 012-9843\tBoston, MA\t45\tHealthcare\n' +
+      'FinEdge Tech\tDavid Miller\tCTO\tdavid@finedge.io\t+1 (555) 014-7721\tNew York, NY\t500\tBFSI\n';
+    const blob = new Blob([header + sample], { type: 'text/tab-separated-values;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'leads-template.csv';
+    a.download = 'leads-template.tsv';
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -281,7 +317,6 @@ export function ImportLeads({ store }: ImportLeadsProps) {
       setVoiceRows(parsed.rows);
       setVoiceErrors(cleanErrors(parsed.errors));
       if (parsed.rows.length === 0 && t.length > 0) {
-        // Try AI extraction for free-form transcript files (txt/json/html/md)
         try {
           const out = await api<{ rows: ProspectRow[]; errors: string[]; transcript?: string }>('/api/import/voice/extract', {
             method: 'POST',
@@ -296,7 +331,7 @@ export function ImportLeads({ store }: ImportLeadsProps) {
       }
       return;
     }
-    // Audio types: mp3, wav, m4a, webm, ogg, flac, aac, wma, mp4, 3gp, etc — handle via audio/* plus video with audio
+    // Audio types: mp3, wav, m4a, webm, ogg, flac, aac, wma, mp4, 3gp
     setVoiceBusy(true);
     setVoiceErrors(['Transcribing…']);
     try {
@@ -309,7 +344,7 @@ export function ImportLeads({ store }: ImportLeadsProps) {
       setVoiceRows(out.rows ?? []);
       setVoiceErrors(out.errors ?? []);
       if (!out.rows?.length && !out.errors?.length) {
-        setVoiceErrors(['Transcribed but no leads extracted. Edit transcript and click Extract with AI (strict).']);
+        setVoiceErrors(['Transcribed but no leads extracted. Edit transcript and click Extract with AI.']);
       }
     } catch (err) {
       setVoiceTranscript('');
@@ -431,7 +466,7 @@ export function ImportLeads({ store }: ImportLeadsProps) {
     }
   };
 
-  // Image handlers — handles image/* (png,jpg,webp,heic,gif,bmp,tiff,svg,pdf) + text-like fallbacks (html/xml/json/md/csv/txt)
+  // Image handlers
   const onImageFile = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -450,43 +485,21 @@ export function ImportLeads({ store }: ImportLeadsProps) {
       lowerName.endsWith('.html') ||
       lowerName.endsWith('.htm') ||
       lowerName.endsWith('.xml') ||
-      lowerName.endsWith('.md') ||
-      file.type.startsWith('text') ||
-      file.type.includes('json') ||
-      file.type.includes('html') ||
-      file.type.includes('xml');
-    try {
-      const buf = await file.arrayBuffer();
-      const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
-      if (!isTextLike) {
-        setImageBase64(b64);
-      } else {
-        setImageBase64(null);
-      }
-    } catch {
-      setImageBase64(null);
-    }
+      lowerName.endsWith('.md');
     if (isTextLike) {
-      const t = await file.text();
+      const t = (await file.text()).trimStart().trim();
       setImageTextFallback(t);
       const parsed = parseProspectAuto(t, file.name);
       setImageRows(parsed.rows);
       setImageErrors(cleanErrors(parsed.errors));
-      if (parsed.rows.length === 0 && t.trim().length > 0) {
-        try {
-          const out = await api<{ rows: ProspectRow[]; errors: string[]; text?: string }>('/api/import/image/extract', {
-            method: 'POST',
-            body: JSON.stringify({ fallbackText: t }),
-          });
-          if (out.rows?.length) {
-            setImageRows(out.rows);
-            setImageErrors(cleanErrors(out.errors ?? []));
-          }
-        } catch {}
-      }
-    } else {
-      setImageRows([]);
-      setImageErrors(['Image received. Please add details below, then click Extract.']);
+      return;
+    }
+    try {
+      const b64 = await fileToBase64(file);
+      setImageBase64(b64);
+      setImageErrors([]);
+    } catch (err) {
+      setImageErrors([err instanceof Error ? err.message : 'Failed to read image']);
     }
   };
 
@@ -495,58 +508,57 @@ export function ImportLeads({ store }: ImportLeadsProps) {
     e.target.value = '';
     if (!file) return;
     setImageVoiceFileName(file.name);
-    if (file.name.toLowerCase().endsWith('.txt') || file.name.toLowerCase().endsWith('.csv') || file.type.startsWith('text')) {
-      const t = await file.text();
-      setImageVoiceTranscript(t);
-    } else {
-      setImageVoiceTranscript('');
-      setImageErrors(['Voice received. Please add transcript below.']);
+    setImageErrors(['Transcribing voice note for card…']);
+    try {
+      const b64 = await fileToBase64(file);
+      const out = await api<{ rows: ProspectRow[]; errors: string[]; transcript?: string }>('/api/import/voice/extract', {
+        method: 'POST',
+        body: JSON.stringify({ audioBase64: b64 }),
+      });
+      if (out.transcript) {
+        setImageVoiceTranscript(out.transcript.trimStart().trim());
+        setImageErrors([]);
+      } else {
+        setImageErrors(['Voice note transcribed as blank. You can type notes manually below.']);
+      }
+    } catch (err) {
+      setImageErrors([err instanceof Error ? err.message : 'Voice transcription failed.']);
     }
   };
 
   const runImageExtract = async () => {
-    const hasImage = !!imageBase64;
-    const hasVoice = !!imageVoiceTranscript.trimStart().trim();
     const cleanedFallback = imageTextFallback.trimStart().trim();
     const cleanedVoice = imageVoiceTranscript.trimStart().trim();
-    if (cleanedFallback !== imageTextFallback) setImageTextFallback(cleanedFallback);
-    if (cleanedVoice !== imageVoiceTranscript) setImageVoiceTranscript(cleanedVoice);
-    if ((hasImage || hasVoice) && imageBase64) {
-      try {
-        const out = await api<{ rows: ProspectRow[]; errors: string[]; text?: string; transcript?: string }>('/api/import/image/extract', {
-          method: 'POST',
-          body: JSON.stringify({
-            imageBase64,
-            mimeType: imageMimeType ?? 'image/jpeg',
-            transcript: cleanedVoice || undefined,
-            fallbackText: cleanedFallback || undefined,
-          }),
-        });
-        if (out.rows?.length) {
-          setImageRows(out.rows);
-          setImageErrors(out.errors ?? []);
-          return;
-        }
-        if (out.errors?.length) {
-          // Fallback to local parse of combined text if AI returns no rows but no hard error
-          const combined = [imageVoiceTranscript, imageTextFallback].filter(Boolean).join('\n');
-          if (combined.trim()) {
-            const parsed = parseProspectPaste(combined);
-            if (parsed.rows.length) {
-              setImageRows(parsed.rows);
-              setImageErrors(parsed.errors);
-              return;
-            }
-          }
-          setImageRows([]);
-          setImageErrors(cleanErrors(out.errors));
-          return;
-        }
-      } catch {
-        // fall through
-      }
+    if (!imageBase64 && !cleanedFallback && !cleanedVoice) {
+      setImageErrors(['Select a business card photo, add fallback text, or supply voice notes.']);
+      return;
     }
-    const combinedFallback = [imageVoiceTranscript.trimStart().trim(), imageTextFallback.trimStart().trim()].filter(Boolean).join('\n');
+    setImageErrors([]);
+    try {
+      const out = await api<{ rows: ProspectRow[]; errors: string[]; text?: string; transcript?: string }>('/api/import/image/extract', {
+        method: 'POST',
+        body: JSON.stringify({
+          imageBase64: imageBase64 ?? undefined,
+          mimeType: imageMimeType ?? 'image/jpeg',
+          fallbackText: cleanedFallback || undefined,
+          transcript: cleanedVoice || undefined,
+        }),
+      });
+      if (out.rows?.length) {
+        setImageRows(out.rows);
+        setImageErrors(cleanErrors(out.errors ?? []));
+        if (out.text && !cleanedFallback) setImageTextFallback(out.text);
+        if (out.transcript && !cleanedVoice) setImageVoiceTranscript(out.transcript);
+        return;
+      }
+      runImageFallbackLocal();
+    } catch {
+      runImageFallbackLocal();
+    }
+  };
+
+  const runImageFallbackLocal = () => {
+    const combinedFallback = [imageVoiceTranscript, imageTextFallback].filter(Boolean).join('\n').trimStart().trim();
     const toParse = combinedFallback || imageTextFallback.trimStart().trim();
     const parsed = parseProspectPaste(toParse);
     if (parsed.rows.length) {
@@ -582,8 +594,10 @@ export function ImportLeads({ store }: ImportLeadsProps) {
     }
   };
 
+  const validManualCount = manualLeads.filter((l) => l.company.trim() && l.prospectName.trim()).length;
+
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto max-w-4xl space-y-6">
       <header>
         <p className="text-xs font-semibold tracking-[0.14em] text-teal-700 uppercase">
           Morning import
@@ -592,11 +606,7 @@ export function ImportLeads({ store }: ImportLeadsProps) {
           Import leads
         </h1>
         <p className="mt-2 text-sm text-stone-500">
-          Add one lead or import many. Columns:{' '}
-          <span className="font-medium text-stone-700">
-            Company, Prospect Name, Job Title, Email, Phone, Location, Employees, Industry
-          </span>
-          . Existing companies are matched by name; duplicate emails are skipped. Voice & image use AI extraction against your ICP.
+          Add single or multiple leads at once. Supported across: Manual Entry, Bulk Paste/Files, Voice Audio, and Business Card OCR.
         </p>
         {icp ? (
           <p className="mt-2 rounded-none bg-amber-50 px-3 py-2 text-xs text-amber-800">
@@ -621,7 +631,12 @@ export function ImportLeads({ store }: ImportLeadsProps) {
             onClick={() => setMode(m)}
             data-testid={`import-tab-${m}`}
           >
-            <span>{m === 'single' ? 'Single lead' : m === 'bulk' ? 'Bulk import' : m === 'voice' ? 'Voice' : 'Image / Card'}</span>
+            <span>{m === 'single' ? 'Manual Entry' : m === 'bulk' ? 'Bulk import' : m === 'voice' ? 'Voice' : 'Image / Card'}</span>
+            {m === 'single' && manualLeads.length > 1 ? (
+              <span className="rounded bg-teal-100 px-1.5 py-0.2 text-[10px] font-bold text-teal-800">
+                {manualLeads.length}
+              </span>
+            ) : null}
             {m === 'voice' && !sub.hasVoice ? (
               <span className="rounded bg-amber-100 px-1 py-0.2 text-[10px] font-bold text-amber-800">
                 PLUS
@@ -637,85 +652,191 @@ export function ImportLeads({ store }: ImportLeadsProps) {
       </div>
 
       {mode === 'single' ? (
-        <form
-          onSubmit={runSingleImport}
-          className="space-y-4 rounded-none border border-[var(--color-line)] bg-[var(--color-panel)] p-5"
-        >
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Company *" className="sm:col-span-2">
-              <input
-                className={inputClass}
-                value={single.company}
-                onChange={(e) => setSingle((s) => ({ ...s, company: e.target.value }))}
-                required
-              />
-            </Field>
-            <Field label="Prospect name *">
-              <input
-                className={inputClass}
-                value={single.prospectName}
-                onChange={(e) => setSingle((s) => ({ ...s, prospectName: e.target.value }))}
-                required
-              />
-            </Field>
-            <Field label="Job title">
-              <input
-                className={inputClass}
-                value={single.jobTitle}
-                onChange={(e) => setSingle((s) => ({ ...s, jobTitle: e.target.value }))}
-              />
-            </Field>
-            <Field label="Email">
-              <input
-                type="email"
-                className={inputClass}
-                value={single.email}
-                onChange={(e) => setSingle((s) => ({ ...s, email: e.target.value }))}
-              />
-            </Field>
-            <Field label="Phone">
-              <input
-                className={inputClass}
-                value={single.phone}
-                onChange={(e) => setSingle((s) => ({ ...s, phone: e.target.value }))}
-              />
-            </Field>
-            <Field label="Location">
-              <input
-                className={inputClass}
-                value={single.location}
-                onChange={(e) => setSingle((s) => ({ ...s, location: e.target.value }))}
-              />
-            </Field>
-            <Field label="Employees">
-              <input
-                className={inputClass}
-                inputMode="numeric"
-                value={single.employees}
-                onChange={(e) => setSingle((s) => ({ ...s, employees: e.target.value }))}
-              />
-            </Field>
-            <Field label="Industry" className="sm:col-span-2">
-              <input
-                className={inputClass}
-                value={single.industry}
-                onChange={(e) => setSingle((s) => ({ ...s, industry: e.target.value }))}
-                placeholder="Healthcare, SaaS, …"
-              />
-            </Field>
-          </div>
-          {single.company && single.prospectName ? (
-            <div className="rounded-none bg-stone-50 px-3 py-2 text-xs">
-              AI score preview:{' '}
-              <span className={`inline-flex items-center whitespace-nowrap rounded-none px-2.5 py-0.5 text-xs font-semibold ${scoreColor(scoreProspect({ company: single.company, prospectName: single.prospectName, jobTitle: single.jobTitle, email: single.email.toLowerCase(), phone: single.phone, location: single.location, employees: single.employees ? Number(single.employees.replace(/[^0-9]/g, '')) || null : null, industry: single.industry }, icp).score)}`}>
-                {scoreLabel(scoreProspect({ company: single.company, prospectName: single.prospectName, jobTitle: single.jobTitle, email: single.email.toLowerCase(), phone: single.phone, location: single.location, employees: single.employees ? Number(single.employees.replace(/[^0-9]/g, '')) || null : null, industry: single.industry }, icp).score)}
-              </span>
-              <span className="ml-2 text-stone-600 font-medium">({scoreProspect({ company: single.company, prospectName: single.prospectName, jobTitle: single.jobTitle, email: single.email.toLowerCase(), phone: single.phone, location: single.location, employees: single.employees ? Number(single.employees.replace(/[^0-9]/g, '')) || null : null, industry: single.industry }, icp).reasons.join(' · ')})</span>
+        <form onSubmit={runManualImport} className="space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-medium text-stone-600">
+              Enter 1 or multiple leads below. Click <span className="font-semibold text-stone-900">+ Add another lead</span> to input more leads.
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={addManualLead}
+                className="inline-flex items-center gap-1 rounded-none border border-teal-600 bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-800 hover:bg-teal-100"
+              >
+                <span>+</span> Add another lead
+              </button>
+              {manualLeads.length > 1 ? (
+                <button
+                  type="button"
+                  onClick={clearManualLeads}
+                  className="text-xs text-stone-500 hover:text-rose-600"
+                >
+                  Reset form
+                </button>
+              ) : null}
             </div>
-          ) : null}
-          <button type="submit" className={btnPrimary} disabled={busy}>
-            {busy ? 'Saving…' : 'Add lead'}
-          </button>
+          </div>
+
+          <div className="space-y-4">
+            {manualLeads.map((lead, idx) => {
+              const previewScore = lead.company.trim() && lead.prospectName.trim()
+                ? scoreProspect(
+                    {
+                      company: lead.company,
+                      prospectName: lead.prospectName,
+                      jobTitle: lead.jobTitle,
+                      email: lead.email.toLowerCase(),
+                      phone: lead.phone,
+                      location: lead.location,
+                      employees: lead.employees ? Number(lead.employees.replace(/[^0-9]/g, '')) || null : null,
+                      industry: lead.industry,
+                      description: lead.description,
+                    },
+                    icp
+                  )
+                : null;
+
+              return (
+                <div
+                  key={lead.id}
+                  className="relative rounded-none border border-[var(--color-line)] bg-[var(--color-panel)] p-5 space-y-4"
+                >
+                  <div className="flex items-center justify-between border-b border-[var(--color-line)] pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-stone-100 text-[11px] font-bold text-stone-700">
+                        {idx + 1}
+                      </span>
+                      <h3 className="text-sm font-semibold text-stone-800">
+                        {lead.company.trim() || lead.prospectName.trim()
+                          ? `${lead.prospectName || 'Lead'} — ${lead.company || 'Company'}`
+                          : `Lead Entry #${idx + 1}`}
+                      </h3>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {previewScore ? (
+                        <span className={`inline-flex items-center rounded-none px-2 py-0.5 text-[11px] font-semibold ${scoreColor(previewScore.score)}`}>
+                          Score: {scoreLabel(previewScore.score)} ({previewScore.score}/10)
+                        </span>
+                      ) : null}
+                      {manualLeads.length > 1 ? (
+                        <button
+                          type="button"
+                          onClick={() => removeManualLead(lead.id)}
+                          className="text-xs font-semibold text-stone-400 hover:text-rose-600"
+                          title="Remove this lead"
+                        >
+                          ✕ Remove
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Field label="Company *">
+                      <input
+                        className={inputClass}
+                        value={lead.company}
+                        onChange={(e) => updateManualLead(lead.id, 'company', e.target.value)}
+                        placeholder="e.g. Acme Health"
+                        required
+                      />
+                    </Field>
+                    <Field label="Prospect Name *">
+                      <input
+                        className={inputClass}
+                        value={lead.prospectName}
+                        onChange={(e) => updateManualLead(lead.id, 'prospectName', e.target.value)}
+                        placeholder="e.g. Dr. Alex Mercer"
+                        required
+                      />
+                    </Field>
+                    <Field label="Job Title">
+                      <input
+                        className={inputClass}
+                        value={lead.jobTitle}
+                        onChange={(e) => updateManualLead(lead.id, 'jobTitle', e.target.value)}
+                        placeholder="e.g. Chief Medical Officer"
+                      />
+                    </Field>
+                    <Field label="Work Email">
+                      <input
+                        type="email"
+                        className={inputClass}
+                        value={lead.email}
+                        onChange={(e) => updateManualLead(lead.id, 'email', e.target.value)}
+                        placeholder="alex@acmehealth.com"
+                      />
+                    </Field>
+                    <Field label="Phone">
+                      <input
+                        className={inputClass}
+                        value={lead.phone}
+                        onChange={(e) => updateManualLead(lead.id, 'phone', e.target.value)}
+                        placeholder="+1 (555) 019-2834"
+                      />
+                    </Field>
+                    <Field label="Location">
+                      <input
+                        className={inputClass}
+                        value={lead.location}
+                        onChange={(e) => updateManualLead(lead.id, 'location', e.target.value)}
+                        placeholder="Austin, TX"
+                      />
+                    </Field>
+                    <Field label="Employees / Headcount">
+                      <input
+                        className={inputClass}
+                        inputMode="numeric"
+                        value={lead.employees}
+                        onChange={(e) => updateManualLead(lead.id, 'employees', e.target.value)}
+                        placeholder="150"
+                      />
+                    </Field>
+                    <Field label="Industry">
+                      <input
+                        className={inputClass}
+                        value={lead.industry}
+                        onChange={(e) => updateManualLead(lead.id, 'industry', e.target.value)}
+                        placeholder="Healthcare, SaaS, BFSI, Retail..."
+                      />
+                    </Field>
+                    <Field label="Context / Notes / Description" className="sm:col-span-2">
+                      <input
+                        className={inputClass}
+                        value={lead.description}
+                        onChange={(e) => updateManualLead(lead.id, 'description', e.target.value)}
+                        placeholder="Key requirements, conversation takeaway, or discovery note"
+                      />
+                    </Field>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+            <button
+              type="button"
+              onClick={addManualLead}
+              className={`${btnGhost} text-xs`}
+            >
+              + Add another lead
+            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="submit"
+                className={btnPrimary}
+                disabled={busy || validManualCount === 0}
+              >
+                {busy
+                  ? 'Importing leads…'
+                  : validManualCount > 1
+                  ? `Import All ${validManualCount} Leads`
+                  : 'Import Lead'}
+              </button>
+            </div>
+          </div>
+
           {lastResult && mode === 'single' ? (
             <p className={`rounded-none px-3 py-2 text-sm ${resultBannerClass(lastResult.ok)}`}>
               {lastResult.message}
@@ -748,102 +869,94 @@ export function ImportLeads({ store }: ImportLeadsProps) {
             </div>
 
             <label className="mt-4 block text-sm font-medium text-stone-600">
-              Or paste table here
+              Paste multiple leads (TSV, CSV, Excel, JSON, HTML tables, Markdown, or text)
             </label>
             <textarea
-              className={`${inputClass} mt-2 min-h-[220px] font-mono text-xs leading-relaxed`}
+              className={`${inputClass} mt-1.5 h-48 font-mono text-xs`}
+              placeholder={`Paste any table or list of leads...\n\nExample:\nAcme Corp\tAlex Mercer\tVP of Sales\talex@acme.com\t+1 (555) 019-2834\tAustin, TX\t150\tSaaS\nBioGen Labs\tSarah Connor\tHead of Ops\tsarah@biogen.org\t+1 (555) 012-9843\tBoston, MA\t45\tHealthcare`}
               value={text}
               onChange={(e) => {
-                setText(e.target.value);
                 setFileName(null);
                 setFileRows([]);
                 setFileErrors([]);
-                setLastResult(null);
+                setText(e.target.value);
               }}
-              placeholder={EXAMPLE}
-              spellCheck={false}
             />
 
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                className={btnPrimary}
-                onClick={() => void runBulkImport()}
-                disabled={busy}
-              >
-                {busy
-                  ? 'Importing…'
-                  : `Import ${bulkRows.length > 0 ? `${bulkRows.length} rows` : ''}`}
-              </button>
-              <button
-                type="button"
-                className={btnGhost}
-                onClick={() => {
-                  setText('');
-                  setFileName(null);
-                  setFileRows([]);
-                  setFileErrors([]);
-                  setLastResult(null);
-                }}
-              >
-                Clear
-              </button>
-              <button
-                type="button"
-                className={btnGhost}
-                onClick={() => {
-                  setText(EXAMPLE);
-                  setFileName(null);
-                  setFileRows([]);
-                  setFileErrors([]);
-                  setLastResult(null);
-                }}
-              >
-                Load example format
-              </button>
-            </div>
-
             {bulkErrors.length > 0 ? (
-              <ul className="mt-3 space-y-1 rounded-none bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                {bulkErrors.slice(0, 8).map((err) => (
-                  <li key={err}>{err}</li>
+              <ul className="mt-3 space-y-1 text-xs text-amber-800">
+                {bulkErrors.map((err, i) => (
+                  <li key={i}>{err}</li>
                 ))}
-                {bulkErrors.length > 8 ? <li>+{bulkErrors.length - 8} more…</li> : null}
               </ul>
             ) : null}
 
-            {lastResult && mode === 'bulk' ? (
-              <p
-                className={`mt-3 rounded-none px-3 py-2 text-sm ${resultBannerClass(lastResult.ok)}`}
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                className={btnPrimary}
+                disabled={busy || bulkRows.length === 0}
+                onClick={runBulkImport}
               >
+                {busy
+                  ? 'Importing…'
+                  : bulkRows.length > 0
+                  ? `Import all ${bulkRows.length} row${bulkRows.length > 1 ? 's' : ''}`
+                  : 'Import rows'}
+              </button>
+              {bulkRows.length > 0 ? (
+                <span className="text-xs text-stone-500">
+                  {bulkRows.length} valid prospect{bulkRows.length > 1 ? 's' : ''} across {byCompany.length} compan{byCompany.length === 1 ? 'y' : 'ies'}
+                </span>
+              ) : null}
+            </div>
+
+            {lastResult && mode === 'bulk' ? (
+              <p className={`mt-3 rounded-none px-3 py-2 text-sm ${resultBannerClass(lastResult.ok)}`}>
                 {lastResult.message}
               </p>
             ) : null}
           </div>
 
-          {byCompany.length > 0 ? (
-            <div className="rounded-none border border-[var(--color-line)] bg-[var(--color-panel)] p-5">
-              <h2 className="text-sm font-semibold text-stone-800">Preview by company</h2>
-              <ul className="mt-3 divide-y divide-[var(--color-line)]">
-                {byCompany.map((c) => (
-                  <li key={c.company} className="flex items-center justify-between py-2 text-sm">
-                    <span className="font-medium text-stone-800">{c.company}</span>
-                    <span className="text-stone-500">{c.count} contacts</span>
-                  </li>
-                ))}
-              </ul>
-              {scoredBulk.length ? (
-                <div className="mt-4 space-y-2">
-                  <h3 className="text-xs font-semibold tracking-wide text-stone-500 uppercase">AI scores (ICP)</h3>
-                  {scoredBulk.slice(0, 8).map(({ row, score }, i) => (
-                    <div key={`${row.company}-${i}`} className="flex items-center justify-between text-xs gap-2">
-                      <span className="truncate pr-2">{row.company} — {row.prospectName}</span>
-                      <span className={`inline-flex items-center whitespace-nowrap rounded-none px-2 py-0.5 text-xs font-semibold ${scoreColor(score.score)}`}>{scoreLabel(score.score)}</span>
-                    </div>
-                  ))}
-                  {scoredBulk.length > 8 ? <p className="text-xs text-stone-400">+{scoredBulk.length - 8} more</p> : null}
-                </div>
-              ) : null}
+          {bulkRows.length > 0 ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-stone-900">
+                  Preview ({bulkRows.length} rows to import)
+                </h3>
+              </div>
+              <div className="overflow-x-auto rounded-none border border-[var(--color-line)] bg-[var(--color-panel)]">
+                <table className="w-full text-left text-xs">
+                  <thead className="border-b border-[var(--color-line)] bg-stone-50 text-stone-500">
+                    <tr>
+                      <th className="px-3 py-2 font-semibold">Company</th>
+                      <th className="px-3 py-2 font-semibold">Prospect</th>
+                      <th className="px-3 py-2 font-semibold">Title</th>
+                      <th className="px-3 py-2 font-semibold">Email</th>
+                      <th className="px-3 py-2 font-semibold">Phone</th>
+                      <th className="px-3 py-2 font-semibold">Industry</th>
+                      <th className="px-3 py-2 font-semibold">Score</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--color-line)]/50">
+                    {scoredBulk.map(({ row: r, score }, i) => (
+                      <tr key={i} className="hover:bg-stone-50/50">
+                        <td className="px-3 py-2 font-medium text-stone-900">{r.company}</td>
+                        <td className="px-3 py-2 text-stone-700">{r.prospectName}</td>
+                        <td className="px-3 py-2 text-stone-500">{r.jobTitle || '—'}</td>
+                        <td className="px-3 py-2 font-mono text-[11px] text-stone-500">{r.email || '—'}</td>
+                        <td className="px-3 py-2 text-stone-500">{r.phone || '—'}</td>
+                        <td className="px-3 py-2 text-stone-500">{r.industry || '—'}</td>
+                        <td className="px-3 py-2">
+                          <span className={`inline-flex items-center rounded-none px-2 py-0.5 text-[11px] font-semibold ${scoreColor(score.score)}`}>
+                            {scoreLabel(score.score)}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           ) : null}
         </>
@@ -852,92 +965,115 @@ export function ImportLeads({ store }: ImportLeadsProps) {
       {mode === 'voice' ? (
         <div className="space-y-4 rounded-none border border-[var(--color-line)] bg-[var(--color-panel)] p-5">
           {!sub.hasVoice ? (
-            <div className="rounded-none border border-amber-300 bg-amber-50 p-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold text-amber-950 uppercase tracking-wider">Voice AI · Plus & Pro Feature</p>
-                  <p className="mt-0.5 text-xs text-amber-800">
-                    Audio recording, auto-transcription via Whisper, and voice lead extraction are available on Plus, Pro, and Enterprise tiers.
-                  </p>
-                </div>
-                <a
-                  href="/?page=subscription"
-                  className={`${btnPrimary} text-xs py-1.5 px-3 bg-amber-800 hover:bg-amber-900 text-white`}
+            <div className="rounded-none border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">
+              Voice AI lead extraction requires the <span className="font-semibold">Plus or Pro Plan</span>.
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={isRecording ? stopRecording : startRecording}
+              className={`${btnPrimary} ${isRecording ? 'bg-rose-600 hover:bg-rose-700' : ''}`}
+              disabled={voiceBusy || !sub.hasVoice}
+            >
+              {isRecording ? `⏹ Stop Recording (${recordSeconds}s)` : '🎙 Record Voice Note'}
+            </button>
+            <label className={`${btnGhost} cursor-pointer`}>
+              Upload Audio File
+              <input
+                type="file"
+                accept="audio/*,.webm,.wav,.mp3,.m4a,.ogg,.flac,.aac"
+                className="hidden"
+                onChange={onVoiceFile}
+                disabled={voiceBusy || !sub.hasVoice}
+              />
+            </label>
+            {voiceFileName ? (
+              <span className="text-xs text-stone-500">{voiceFileName}</span>
+            ) : null}
+          </div>
+
+          <Field label="Voice Transcript">
+            <textarea
+              className={`${inputClass} h-32 text-xs`}
+              placeholder="Spoken notes or voice transcript will appear here..."
+              value={voiceTranscript}
+              onChange={(e) => setVoiceTranscript(e.target.value)}
+            />
+          </Field>
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={runVoiceExtract}
+              className={btnPrimary}
+              disabled={voiceBusy || !voiceTranscript.trim()}
+            >
+              {voiceBusy ? 'Extracting with AI…' : 'Extract Leads with AI'}
+            </button>
+          </div>
+
+          {voiceErrors.length > 0 ? (
+            <ul className="space-y-1 text-xs text-amber-800">
+              {voiceErrors.map((err, i) => (
+                <li key={i}>{err}</li>
+              ))}
+            </ul>
+          ) : null}
+
+          {voiceRows.length > 0 ? (
+            <div className="space-y-3 pt-3 border-t border-[var(--color-line)]">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-stone-700">
+                  Extracted Leads ({voiceRows.length})
+                </h4>
+                <button
+                  type="button"
+                  onClick={runVoiceImport}
+                  className={btnPrimary}
+                  disabled={busy}
                 >
-                  View Plans & Upgrade
-                </a>
+                  {busy ? 'Importing…' : `Import All ${voiceRows.length} Voice Leads`}
+                </button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="border-b border-[var(--color-line)] bg-stone-50 text-stone-500">
+                    <tr>
+                      <th className="px-3 py-2 font-semibold">Company</th>
+                      <th className="px-3 py-2 font-semibold">Prospect</th>
+                      <th className="px-3 py-2 font-semibold">Title</th>
+                      <th className="px-3 py-2 font-semibold">Email</th>
+                      <th className="px-3 py-2 font-semibold">Phone</th>
+                      <th className="px-3 py-2 font-semibold">Score</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--color-line)]/50">
+                    {scoredVoice.map(({ row: r, score }, i) => (
+                      <tr key={i}>
+                        <td className="px-3 py-2 font-medium text-stone-900">{r.company}</td>
+                        <td className="px-3 py-2 text-stone-700">{r.prospectName}</td>
+                        <td className="px-3 py-2 text-stone-500">{r.jobTitle || '—'}</td>
+                        <td className="px-3 py-2 font-mono text-[11px] text-stone-500">{r.email || '—'}</td>
+                        <td className="px-3 py-2 text-stone-500">{r.phone || '—'}</td>
+                        <td className="px-3 py-2">
+                          <span className={`inline-flex items-center rounded-none px-2 py-0.5 text-[11px] font-semibold ${scoreColor(score.score)}`}>
+                            {scoreLabel(score.score)}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           ) : null}
-          <Field label="Voice lead — upload or record">
-            <div className="flex flex-wrap items-center gap-2">
-              <label className={`${btnGhost} cursor-pointer`}>
-                Upload audio / transcript
-                <input
-                  type="file"
-                  accept="audio/*,video/*,.mp3,.wav,.m4a,.webm,.ogg,.flac,.aac,.wma,.mp4,.3gp,.txt,.csv,.tsv,.html,.htm,.xml,.json,.md"
-                  className="hidden"
-                  onChange={onVoiceFile}
-                />
-              </label>
-              {!isRecording ? (
-                <button type="button" className={btnGhost} onClick={() => void startRecording()}>
-                  Record
-                </button>
-              ) : (
-                <button type="button" className={btnPrimary} onClick={stopRecording}>
-                  Stop ({recordSeconds}s)
-                </button>
-              )}
-              {voiceFileName ? <span className="text-xs text-stone-500">{voiceFileName}</span> : null}
-            </div>
-          </Field>
-          <Field label="Transcript / spoken details — bulk CSV or natural voice">
-            <textarea
-              className={`${inputClass} min-h-28 font-mono text-xs`}
-              value={voiceTranscript}
-              onChange={(e) => setVoiceTranscript(e.target.value)}
-              placeholder="Speak naturally, record a voice note, or paste lead data (e.g. Met with Alex Smith, VP of Operations at Acme Corp, email alex@acme.example, interested in a demo)&#10;Or paste CSV/TSV data"
-              rows={4}
-            />
-            <p className="mt-1 text-xs text-stone-500">Speak naturally, record a voice note, or paste lead data to automatically extract company, prospect, and contact details.</p>
-          </Field>
-          <div className="flex gap-2">
-            <button type="button" className={btnPrimary} onClick={() => void runVoiceExtract()} disabled={!voiceTranscript.trim() || voiceBusy}>
-              {voiceBusy ? 'Extracting…' : 'Extract with AI'}
-            </button>
-            <button type="button" className={btnGhost} onClick={() => { setVoiceTranscript(''); setVoiceRows([]); setVoiceErrors([]); setVoiceFileName(null); }}>
-              Clear
-            </button>
-          </div>
-          {voiceBusy ? <p className="text-xs text-stone-500">Processing…</p> : null}
-          {voiceErrors.length ? (
-            <ul className="space-y-1 rounded-none bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              {voiceErrors.map((e) => <li key={e}>{e}</li>)}
-            </ul>
-          ) : null}
-          {scoredVoice.length ? (
-            <div className="rounded-none border border-[var(--color-line)] bg-white p-3">
-              <h3 className="text-sm font-semibold text-stone-800">Voice preview — {scoredVoice.length} leads (scored)</h3>
-              <ul className="mt-2 divide-y divide-[var(--color-line)]">
-                {scoredVoice.map(({ row, score }, i) => (
-                  <li key={`${row.company}-${i}`} className="flex items-center justify-between gap-2 py-2 text-sm">
-                    <div className="min-w-0">
-                      <p className="font-medium text-stone-800">{row.company} — {row.prospectName}</p>
-                      <p className="truncate text-xs text-stone-500">{row.jobTitle} · {row.email} · {row.industry}</p>
-                      <p className="text-[11px] text-stone-400">{score.reasons.join(' · ')}</p>
-                    </div>
-                    <span className={`shrink-0 inline-flex items-center whitespace-nowrap rounded-none px-2.5 py-1 text-xs font-semibold ${scoreColor(score.score)}`}>{scoreLabel(score.score)}</span>
-                  </li>
-                ))}
-              </ul>
-              <button type="button" className={`${btnPrimary} mt-3`} onClick={() => void runVoiceImport()} disabled={busy}>
-                {busy ? 'Importing…' : `Import ${scoredVoice.length} voice leads`}
-              </button>
-            </div>
-          ) : null}
+
           {lastResult && mode === 'voice' ? (
-            <p className={`rounded-none px-3 py-2 text-sm ${resultBannerClass(lastResult.ok)}`}>{lastResult.message}</p>
+            <p className={`rounded-none px-3 py-2 text-sm ${resultBannerClass(lastResult.ok)}`}>
+              {lastResult.message}
+            </p>
           ) : null}
         </div>
       ) : null}
@@ -945,118 +1081,139 @@ export function ImportLeads({ store }: ImportLeadsProps) {
       {mode === 'image' ? (
         <div className="space-y-4 rounded-none border border-[var(--color-line)] bg-[var(--color-panel)] p-5">
           {!sub.hasImage ? (
-            <div className="rounded-none border border-amber-300 bg-amber-50 p-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold text-amber-950 uppercase tracking-wider">Image AI · Plus & Pro Feature</p>
-                  <p className="mt-0.5 text-xs text-amber-800">
-                    Business card OCR with Vision AI and combined voice + image lead parsing are available on Plus, Pro, and Enterprise tiers.
-                  </p>
-                </div>
-                <a
-                  href="/?page=subscription"
-                  className={`${btnPrimary} text-xs py-1.5 px-3 bg-amber-800 hover:bg-amber-900 text-white`}
+            <div className="rounded-none border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">
+              Business card OCR requires the <span className="font-semibold">Plus or Pro Plan</span>.
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap items-center gap-2">
+            <label className={`${btnPrimary} cursor-pointer`}>
+              📸 Take Photo / Upload Card
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={onImageFile}
+                disabled={!sub.hasImage}
+              />
+            </label>
+            <label className={`${btnGhost} cursor-pointer`}>
+              🎙 Attach Voice Notes for Card
+              <input
+                type="file"
+                accept="audio/*,.webm,.wav,.mp3,.m4a"
+                className="hidden"
+                onChange={onImageVoiceFile}
+                disabled={!sub.hasImage}
+              />
+            </label>
+            {imageFileName ? (
+              <span className="text-xs text-stone-500">Image: {imageFileName}</span>
+            ) : null}
+            {imageVoiceFileName ? (
+              <span className="text-xs text-stone-500">Voice Note: {imageVoiceFileName}</span>
+            ) : null}
+          </div>
+
+          {imagePreviewUrl ? (
+            <div className="flex max-w-xs items-center gap-3 rounded-none border border-[var(--color-line)] p-2">
+              <img
+                src={imagePreviewUrl}
+                alt="Business card preview"
+                className="max-h-32 object-contain"
+              />
+            </div>
+          ) : null}
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="OCR Text Fallback (Optional)">
+              <textarea
+                className={`${inputClass} h-24 text-xs`}
+                placeholder="Pasted business card text or OCR transcript..."
+                value={imageTextFallback}
+                onChange={(e) => setImageTextFallback(e.target.value)}
+              />
+            </Field>
+            <Field label="Voice Notes on Card (Optional)">
+              <textarea
+                className={`${inputClass} h-24 text-xs`}
+                placeholder="Spoken notes on lead conversation context..."
+                value={imageVoiceTranscript}
+                onChange={(e) => setImageVoiceTranscript(e.target.value)}
+              />
+            </Field>
+          </div>
+
+          <button
+            type="button"
+            onClick={runImageExtract}
+            className={btnPrimary}
+            disabled={!imageBase64 && !imageTextFallback.trim() && !imageVoiceTranscript.trim()}
+          >
+            Extract Leads from Image & Voice
+          </button>
+
+          {imageErrors.length > 0 ? (
+            <ul className="space-y-1 text-xs text-amber-800">
+              {imageErrors.map((err, i) => (
+                <li key={i}>{err}</li>
+              ))}
+            </ul>
+          ) : null}
+
+          {imageRows.length > 0 ? (
+            <div className="space-y-3 pt-3 border-t border-[var(--color-line)]">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-stone-700">
+                  Extracted Leads ({imageRows.length})
+                </h4>
+                <button
+                  type="button"
+                  onClick={runImageImport}
+                  className={btnPrimary}
+                  disabled={busy}
                 >
-                  View Plans & Upgrade
-                </a>
+                  {busy ? 'Importing…' : `Import All ${imageRows.length} Image Leads`}
+                </button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="border-b border-[var(--color-line)] bg-stone-50 text-stone-500">
+                    <tr>
+                      <th className="px-3 py-2 font-semibold">Company</th>
+                      <th className="px-3 py-2 font-semibold">Prospect</th>
+                      <th className="px-3 py-2 font-semibold">Title</th>
+                      <th className="px-3 py-2 font-semibold">Email</th>
+                      <th className="px-3 py-2 font-semibold">Phone</th>
+                      <th className="px-3 py-2 font-semibold">Score</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--color-line)]/50">
+                    {scoredImage.map(({ row: r, score }, i) => (
+                      <tr key={i}>
+                        <td className="px-3 py-2 font-medium text-stone-900">{r.company}</td>
+                        <td className="px-3 py-2 text-stone-700">{r.prospectName}</td>
+                        <td className="px-3 py-2 text-stone-500">{r.jobTitle || '—'}</td>
+                        <td className="px-3 py-2 font-mono text-[11px] text-stone-500">{r.email || '—'}</td>
+                        <td className="px-3 py-2 text-stone-500">{r.phone || '—'}</td>
+                        <td className="px-3 py-2">
+                          <span className={`inline-flex items-center rounded-none px-2 py-0.5 text-[11px] font-semibold ${scoreColor(score.score)}`}>
+                            {scoreLabel(score.score)}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           ) : null}
-          <Field label="Business card — photo or card text (phone camera supported)">
-            <div className="flex flex-wrap items-center gap-2">
-              <label className={`${btnGhost} cursor-pointer`}>
-                Upload image / card
-                <input
-                  type="file"
-                  accept="image/*,.png,.jpg,.jpeg,.webp,.heic,.heif,.gif,.bmp,.tiff,.svg,.pdf,.txt,.csv,.tsv,.html,.htm,.xml,.json,.md"
-                  className="hidden"
-                  onChange={onImageFile}
-                />
-              </label>
-              <label className={`${btnGhost} cursor-pointer`}>
-                Capture on phone
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                  onChange={onImageFile}
-                />
-              </label>
-              {imageFileName ? <span className="text-xs text-stone-500">{imageFileName}</span> : null}
-            </div>
-            {imagePreviewUrl ? (
-              <img src={imagePreviewUrl} alt="card preview" className="mt-3 max-h-48 rounded-none border border-[var(--color-line)] object-contain" />
-            ) : null}
-            <p className="mt-2 text-xs text-stone-500">On phone, “Capture on phone” opens camera directly (back camera). Reuses same AI pipeline.</p>
-          </Field>
-          <Field label="Card text (paste OCR or type)">
-            <textarea
-              className={`${inputClass} min-h-28 font-mono text-xs`}
-              value={imageTextFallback}
-              onChange={(e) => setImageTextFallback(e.target.value)}
-              placeholder="Paste card text or CSV row:&#10;Acme Corp, Alex Smith, Head of Operations, alex@acme.example, 555-0101, Austin, 180, SaaS"
-              rows={4}
-            />
-            <p className="mt-1 text-xs text-stone-500">Text from image. Please ensure Company and Prospect Name are included.</p>
-          </Field>
-          <Field label="Optional voice — combine with image (non-binary)">
-            <div className="flex flex-wrap items-center gap-2">
-              <label className={`${btnGhost} cursor-pointer`}>
-                Upload voice for card
-                <input
-                  type="file"
-                  accept="audio/*,video/*,.mp3,.wav,.m4a,.webm,.ogg,.flac,.aac,.txt,.csv,.tsv,.html,.htm,.xml,.json,.md"
-                  className="hidden"
-                  onChange={onImageVoiceFile}
-                />
-              </label>
-              {imageVoiceFileName ? <span className="text-xs text-stone-500">{imageVoiceFileName}</span> : null}
-            </div>
-            <textarea
-              className={`${inputClass} mt-2 min-h-20 font-mono text-xs`}
-              value={imageVoiceTranscript}
-              onChange={(e) => setImageVoiceTranscript(e.target.value)}
-              placeholder="Optional voice note to enrich card details: &quot;Met Alex from Acme Corp, 120 employees, SaaS, alex@acme.example&quot;"
-              rows={3}
-            />
-            <p className="mt-1 text-xs text-stone-500">When voice is added, both image and transcript are combined.</p>
-          </Field>
-          <div className="flex gap-2">
-            <button type="button" className={btnPrimary} onClick={() => void runImageExtract()} disabled={!imageTextFallback.trim() && !imageVoiceTranscript.trim() && !imageBase64}>
-              Extract with AI
-            </button>
-            <button type="button" className={btnGhost} onClick={() => { setImageTextFallback(''); setImageVoiceTranscript(''); setImageRows([]); setImageErrors([]); setImageFileName(null); setImageVoiceFileName(null); setImageBase64(null); if (imagePreviewUrl) { URL.revokeObjectURL(imagePreviewUrl); setImagePreviewUrl(null); } }}>
-              Clear
-            </button>
-          </div>
-          {imageErrors.length ? (
-            <ul className="space-y-1 rounded-none bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              {imageErrors.map((e) => <li key={e}>{e}</li>)}
-            </ul>
-          ) : null}
-          {scoredImage.length ? (
-            <div className="rounded-none border border-[var(--color-line)] bg-white p-3">
-              <h3 className="text-sm font-semibold text-stone-800">Card preview — {scoredImage.length} leads (scored)</h3>
-              <ul className="mt-2 divide-y divide-[var(--color-line)]">
-                {scoredImage.map(({ row, score }, i) => (
-                  <li key={`${row.company}-${i}`} className="flex items-center justify-between gap-2 py-2 text-sm">
-                    <div className="min-w-0">
-                      <p className="font-medium text-stone-800">{row.company} — {row.prospectName}</p>
-                      <p className="truncate text-xs text-stone-500">{row.jobTitle} · {row.email} · {row.industry}</p>
-                      <p className="text-[11px] text-stone-400">{score.reasons.join(' · ')}</p>
-                    </div>
-                    <span className={`shrink-0 inline-flex items-center whitespace-nowrap rounded-none px-2.5 py-1 text-xs font-semibold ${scoreColor(score.score)}`}>{scoreLabel(score.score)}</span>
-                  </li>
-                ))}
-              </ul>
-              <button type="button" className={`${btnPrimary} mt-3`} onClick={() => void runImageImport()} disabled={busy}>
-                {busy ? 'Importing…' : `Import ${scoredImage.length} card leads`}
-              </button>
-            </div>
-          ) : null}
+
           {lastResult && mode === 'image' ? (
-            <p className={`rounded-none px-3 py-2 text-sm ${resultBannerClass(lastResult.ok)}`}>{lastResult.message}</p>
+            <p className={`rounded-none px-3 py-2 text-sm ${resultBannerClass(lastResult.ok)}`}>
+              {lastResult.message}
+            </p>
           ) : null}
         </div>
       ) : null}
